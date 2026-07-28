@@ -1,5 +1,6 @@
 //! The borrowed handle the render-loop closure gets for one frame.
 
+use super::clock::FrameTime;
 use super::renderer::RenderState;
 use crate::cameras::Camera;
 use crate::core::Scene;
@@ -13,8 +14,7 @@ use crate::input::InputState;
 pub struct Frame<'a> {
     state: &'a mut RenderState,
     input: &'a InputState,
-    delta_seconds: f32,
-    elapsed_seconds: f32,
+    time: FrameTime,
     exit_requested: &'a mut bool,
 }
 
@@ -22,15 +22,13 @@ impl<'a> Frame<'a> {
     pub(super) fn new(
         state: &'a mut RenderState,
         input: &'a InputState,
-        delta_seconds: f32,
-        elapsed_seconds: f32,
+        time: FrameTime,
         exit_requested: &'a mut bool,
     ) -> Self {
         Frame {
             state,
             input,
-            delta_seconds,
-            elapsed_seconds,
+            time,
             exit_requested,
         }
     }
@@ -46,12 +44,12 @@ impl<'a> Frame<'a> {
     /// Seconds since the previous frame — multiply your per-second velocities
     /// by this to stay frame-rate independent.
     pub fn delta_seconds(&self) -> f32 {
-        self.delta_seconds
+        self.time.delta_seconds
     }
 
     /// Seconds since the render loop started.
     pub fn elapsed_seconds(&self) -> f32 {
-        self.elapsed_seconds
+        self.time.elapsed_seconds
     }
 
     /// Keyboard state for this frame.

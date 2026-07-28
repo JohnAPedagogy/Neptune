@@ -18,6 +18,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
+use super::clock::FrameClock;
 use super::frame::Frame;
 use crate::backend::command::{RenderCaches, record_scene};
 use crate::backend::context::{VulkanContext, create_instance};
@@ -89,15 +90,13 @@ impl Renderer {
             .take()
             .expect("render_loop may only be called once per Renderer");
 
-        let now = Instant::now();
         let mut app = App {
             instance: self.instance.clone(),
             options: self.options,
             state: None,
             callback,
             input: InputState::new(),
-            started_at: now,
-            last_frame_at: now,
+            clock: FrameClock::new(Instant::now()),
         };
 
         event_loop
@@ -267,8 +266,7 @@ struct App<F> {
     state: Option<RenderState>,
     callback: F,
     input: InputState,
-    started_at: Instant,
-    last_frame_at: Instant,
+    clock: FrameClock,
 }
 
 impl<F> App<F>
@@ -276,10 +274,10 @@ where
     F: FnMut(&mut Frame),
 {
     fn draw_frame(&mut self, event_loop: &ActiveEventLoop) {
-        let now = Instant::now();
-        let delta_seconds = now.duration_since(self.last_frame_at).as_secs_f32();
-        let elapsed_seconds = now.duration_since(self.started_at).as_secs_f32();
-        self.last_frame_at = now;
+        // Ticked before the early returns below: a minimized window still
+        // closes off the frame, so un-minimizing does not deliver one enormous
+        // delta covering the whole time the window was hidden.
+        let time = self.clock.tick(Instant::now());
 
         let Some(state) = self.state.as_mut() else {
             return;
@@ -294,13 +292,7 @@ where
         state.prepare(window_size);
 
         let mut exit_requested = false;
-        let mut frame = Frame::new(
-            state,
-            &self.input,
-            delta_seconds,
-            elapsed_seconds,
-            &mut exit_requested,
-        );
+        let mut frame = Frame::new(state, &self.input, time, &mut exit_requested);
         (self.callback)(&mut frame);
 
         self.input.end_frame();
@@ -330,7 +322,9 @@ where
         );
 
         self.state = Some(RenderState::new(&self.instance, window));
-        self.last_frame_at = Instant::now();
+        // Window, device and swapchain creation took real time but was not a
+        // frame; the first frame should not be billed for it.
+        self.clock.discard_gap(Instant::now());
     }
 
     fn window_event(
