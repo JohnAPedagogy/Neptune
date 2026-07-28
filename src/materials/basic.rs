@@ -1,24 +1,20 @@
 //! Flat, unlit colour — the `THREE.MeshBasicMaterial` equivalent.
 
-use super::material::{Material, MaterialBinding, MaterialId, MaterialInstanceId};
+use super::material::{Material, MaterialBinding, MaterialId};
 use crate::math::Color;
 
 /// Shades every fragment with one flat colour, ignoring all lights.
 ///
 /// Deliberately unlit, exactly like its Three.js namesake: a spinning cube
 /// drawn with it reads as a silhouette, which is the honest result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MeshBasicMaterial {
     pub color: Color,
-    instance_id: MaterialInstanceId,
 }
 
 impl MeshBasicMaterial {
     pub fn new(color: Color) -> Self {
-        MeshBasicMaterial {
-            color,
-            instance_id: MaterialInstanceId::next(),
-        }
+        MeshBasicMaterial { color }
     }
 }
 
@@ -31,10 +27,6 @@ impl Default for MeshBasicMaterial {
 impl Material for MeshBasicMaterial {
     fn material_id(&self) -> MaterialId {
         MaterialId::Basic
-    }
-
-    fn instance_id(&self) -> MaterialInstanceId {
-        self.instance_id
     }
 
     fn bind(&self) -> MaterialBinding<'_> {
@@ -58,17 +50,14 @@ mod tests {
     }
 
     #[test]
-    fn cloning_preserves_the_instance_identity() {
-        // Clones share a pipeline *and* a descriptor set; they are the same
-        // material as far as the renderer's caches are concerned.
-        let m = MeshBasicMaterial::new(Color::RED);
-        assert_eq!(m.clone().instance_id(), m.instance_id());
+    fn the_default_material_is_opaque_white() {
+        assert_eq!(MeshBasicMaterial::default().color, Color::WHITE);
     }
 
     #[test]
-    fn distinct_materials_get_distinct_instance_ids() {
-        let a = MeshBasicMaterial::new(Color::RED);
-        let b = MeshBasicMaterial::new(Color::RED);
-        assert_ne!(a.instance_id(), b.instance_id());
+    fn recolouring_changes_what_gets_pushed_to_the_gpu() {
+        let mut m = MeshBasicMaterial::new(Color::RED);
+        m.color = Color::BLUE;
+        assert_eq!(m.bind().color, Color::BLUE);
     }
 }

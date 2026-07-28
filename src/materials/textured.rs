@@ -10,7 +10,7 @@
 
 use std::path::Path;
 
-use super::material::{Material, MaterialBinding, MaterialId, MaterialInstanceId};
+use super::material::{Material, MaterialBinding, MaterialId};
 use super::texture::{Texture, TextureError};
 use crate::math::Color;
 
@@ -21,7 +21,6 @@ pub struct SpriteMaterial {
     /// Multiplied into the sampled texel. `Color::WHITE` leaves the texture
     /// untouched; a white glyph atlas tinted here is how coloured text works.
     pub tint: Color,
-    instance_id: MaterialInstanceId,
 }
 
 impl SpriteMaterial {
@@ -32,11 +31,7 @@ impl SpriteMaterial {
 
     /// Wraps a texture and multiplies it by `tint`.
     pub fn with_tint(texture: Texture, tint: Color) -> Self {
-        SpriteMaterial {
-            texture,
-            tint,
-            instance_id: MaterialInstanceId::next(),
-        }
+        SpriteMaterial { texture, tint }
     }
 
     /// Decodes an image file and wraps it.
@@ -54,10 +49,6 @@ impl SpriteMaterial {
 impl Material for SpriteMaterial {
     fn material_id(&self) -> MaterialId {
         MaterialId::Sprite
-    }
-
-    fn instance_id(&self) -> MaterialInstanceId {
-        self.instance_id
     }
 
     fn bind(&self) -> MaterialBinding<'_> {

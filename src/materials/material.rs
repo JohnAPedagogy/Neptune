@@ -1,7 +1,5 @@
 //! What a material has to tell the renderer.
 
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use super::texture::Texture;
 use crate::math::Color;
 
@@ -36,10 +34,6 @@ pub trait Material {
     /// Which pipeline this material draws with.
     fn material_id(&self) -> MaterialId;
 
-    /// Stable per-instance identity, used to cache the descriptor set built
-    /// from this material's bindings.
-    fn instance_id(&self) -> MaterialInstanceId;
-
     /// The per-draw data the renderer pushes to the GPU.
     fn bind(&self) -> MaterialBinding<'_>;
 }
@@ -51,24 +45,8 @@ impl<M: Material + ?Sized> Material for Box<M> {
         (**self).material_id()
     }
 
-    fn instance_id(&self) -> MaterialInstanceId {
-        (**self).instance_id()
-    }
-
     fn bind(&self) -> MaterialBinding<'_> {
         (**self).bind()
-    }
-}
-
-/// A process-unique identity for one material *instance*.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct MaterialInstanceId(pub(crate) u64);
-
-static NEXT_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
-
-impl MaterialInstanceId {
-    pub(crate) fn next() -> Self {
-        MaterialInstanceId(NEXT_INSTANCE_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
 
@@ -80,11 +58,6 @@ mod tests {
     use crate::materials::{MeshBasicMaterial, SpriteMaterial, Texture};
     use crate::math::Color;
     use crate::objects::Mesh;
-
-    #[test]
-    fn instance_ids_are_unique() {
-        assert_ne!(MaterialInstanceId::next(), MaterialInstanceId::next());
-    }
 
     #[test]
     fn a_boxed_material_forwards_to_the_material_inside() {
