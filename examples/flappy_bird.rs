@@ -13,12 +13,20 @@
 //! - `main` is the winit/render plumbing: it owns a `neptune::Scene`, keeps a
 //!   handful of long-lived meshes in sync with `logic::GameState` every
 //!   frame, and never invents any game rules of its own.
+//!
+//! Setting `NEPTUNE_SCREENSHOT=<path>` saves a frame and exits instead of
+//! waiting to be closed (see [`capture`]), and switches on [`logic::autopilot_wants_flap`]
+//! so the bird is somewhere worth photographing when the shutter goes. That is
+//! how the tutorial's gameplay screenshots are produced.
 
 use std::path::Path;
 
 use neptune::prelude::*;
 
-use logic::{GameConfig, GameState, bird_tilt_radians, clamp_delta};
+use logic::{GameState, autopilot_wants_flap, bird_tilt_radians, clamp_delta, game_config};
+
+#[path = "common/capture.rs"]
+mod capture;
 
 /// Gravity/velocity integration, pipe scrolling and recycling, collision, and
 /// scoring — everything a test can exercise without a GPU or a window.
@@ -289,6 +297,80 @@ mod logic {
         }
     }
 
+    /// The tuning the game actually ships with.
+    ///
+    /// `main` derives `bird_size` from the sprite's aspect ratio, which is why
+    /// it is a parameter rather than another constant. Living here rather than
+    /// inline in `main` lets the tests fly the real game instead of a
+    /// convenient miniature of it.
+    pub fn game_config(bird_size: Vec2) -> GameConfig {
+        GameConfig {
+            gravity: -16.0,
+            flap_velocity: 6.0,
+            floor_y: -4.2,
+            ceiling_y: 4.6,
+            bird_start: Vec2::new(-1.5, 0.0),
+            bird_size,
+            pipe_width: 0.8,
+            pipe_gap: 2.2,
+            pipe_speed: 2.4,
+            pipe_spacing: 3.0,
+            first_pipe_x: 3.0,
+            pipe_count: 4,
+            gap_center_min: -2.3,
+            gap_center_max: 2.7,
+            respawn_x: -4.5,
+        }
+    }
+
+    /// How far below the centre of the gap it is heading for the autopilot lets
+    /// the bird sag before flapping.
+    ///
+    /// A flap in the real tuning buys `flap_velocity^2 / (2 * gravity)` =
+    /// `6^2 / 32` ≈ 1.13 world units of climb, and half the gap is only 1.1 —
+    /// so flapping *at* the centre would carry the bird straight through the
+    /// top pipe. Spending the flap early, below the centre, keeps the whole arc
+    /// inside the gap.
+    const AUTOPILOT_SAG: f32 = 0.5;
+
+    /// Whether a hands-off autopilot would flap this frame.
+    ///
+    /// Nothing here is part of the game: it exists so a scripted screenshot run
+    /// (`NEPTUNE_SCREENSHOT`, see the module docs) has a bird in the air with a
+    /// score on the board, rather than one that dropped to the floor a second
+    /// after the window opened because nobody was there to press Space. It is
+    /// deliberately dumb — aim at the gap you are about to fly through, flap
+    /// once you have sagged far enough below it — and it lives in `logic` only
+    /// because that makes it testable, which the test below does by flying whole
+    /// games with it.
+    ///
+    /// It is a photographer, not a champion: it clears a handful of pipes and
+    /// then eventually meets a gap the bird physically cannot climb to in the
+    /// time the next pipe takes to arrive.
+    pub fn autopilot_wants_flap(game: &GameState) -> bool {
+        if game.game_over {
+            return false;
+        }
+
+        // The gap to aim at is the nearest one the bird has not fully cleared.
+        // The comparison is against the bird's *trailing* edge, not its centre:
+        // switching to the next pipe's height while the bird's tail is still
+        // between the current pipe's jaws is what an earlier version of this did,
+        // and it is what flew the bird into their edges.
+        let bird_tail = game.bird.position.x - game.config.bird_size.x * 0.5;
+        let target = game
+            .pipes
+            .iter()
+            .filter(|pipe| pipe.x + game.config.pipe_width * 0.5 >= bird_tail)
+            .min_by(|a, b| a.x.total_cmp(&b.x))
+            .map_or(0.0, |pipe| pipe.gap_center);
+
+        // Deliberately not gated on falling: flapping every frame pins the
+        // velocity at `flap_velocity` and doubles the climb rate, which is what
+        // gets the bird up to a gap that is much higher than the last one.
+        game.bird.position.y < target - AUTOPILOT_SAG
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -484,6 +566,116 @@ mod logic {
         }
 
         #[test]
+        fn the_autopilot_flaps_only_when_it_has_sagged_below_the_gap_it_is_aiming_for() {
+            let mut game = GameState::new(config(), &mut rng());
+            game.pipes[0].x = 2.0;
+            game.pipes[0].gap_center = 0.0;
+            game.pipes[1].x = 7.0;
+            game.pipes[1].gap_center = 4.0;
+
+            // Level with the gap it is heading for: no need to flap yet.
+            game.bird.position.y = 0.0;
+            game.bird.velocity = -1.0;
+            assert!(!autopilot_wants_flap(&game));
+
+            // Sagged below it: flap.
+            game.bird.position.y = -2.0;
+            assert!(autopilot_wants_flap(&game));
+
+            // Still below it and already climbing: keep flapping, which is what
+            // doubles the climb rate.
+            game.bird.velocity = 5.0;
+            assert!(autopilot_wants_flap(&game));
+
+            // Back level with the gap: stop.
+            game.bird.position.y = 0.0;
+            assert!(!autopilot_wants_flap(&game));
+        }
+
+        #[test]
+        fn the_autopilot_aims_at_the_next_pipe_not_one_already_behind_the_bird() {
+            let mut game = GameState::new(config(), &mut rng());
+            game.bird.position = Vec2::new(0.0, -2.0);
+            // A pipe well behind the bird sits high; the one ahead of it is
+            // level with the bird. Aiming at the one behind would flap.
+            game.pipes[0].x = -5.0;
+            game.pipes[0].gap_center = 4.0;
+            game.pipes[1].x = 3.0;
+            game.pipes[1].gap_center = -2.0;
+            assert!(
+                !autopilot_wants_flap(&game),
+                "the bird is already level with the gap ahead of it"
+            );
+        }
+
+        #[test]
+        fn the_autopilot_holds_a_gap_until_the_birds_tail_is_clear_of_it() {
+            let mut game = GameState::new(config(), &mut rng());
+            // config(): pipe_width 1.0, bird_size 0.5 x 0.5. A pipe whose right
+            // edge is at x = -0.1 is behind the bird's centre (0.0) but not yet
+            // behind its trailing edge at -0.25, so the bird is still between
+            // its jaws and must keep aiming at *its* gap.
+            game.bird.position = Vec2::new(0.0, 0.0);
+            game.pipes[0].x = -0.6;
+            game.pipes[0].gap_center = 0.0;
+            game.pipes[1].x = 4.0;
+            game.pipes[1].gap_center = 4.0;
+            assert!(
+                !autopilot_wants_flap(&game),
+                "climbing toward the next gap here clips the pipe being passed"
+            );
+
+            // Once that pipe is fully behind the bird, the high gap ahead is
+            // what matters and the climb starts.
+            game.pipes[0].x = -2.0;
+            assert!(autopilot_wants_flap(&game));
+        }
+
+        #[test]
+        fn a_dead_bird_does_not_flap() {
+            let mut game = GameState::new(config(), &mut rng());
+            game.bird.position.y = config().floor_y - 10.0;
+            game.update(0.0, &mut rng());
+            assert!(game.game_over);
+            assert!(!autopilot_wants_flap(&game));
+        }
+
+        /// The screenshot harness's actual contract: on the *real* tuning, and
+        /// whatever pipe layout `thread_rng` happens to deal on the day, the
+        /// autopilot keeps the bird alive past the moment the capture fires and
+        /// has scored at least once by then — otherwise `NEPTUNE_SCREENSHOT`
+        /// would photograph a bird lying on the floor.
+        ///
+        /// 2.5 seconds is the deadline the tutorial's gameplay screenshot is
+        /// taken at; the first pipe reaches the bird at about 1.9. Sweeping 64
+        /// layouts stands in for "any layout": at the time of writing the worst
+        /// of 400 survived 2.72 seconds, so the margin here is thin by nature —
+        /// the game is only so survivable — but real.
+        #[test]
+        fn the_autopilot_is_still_flying_and_has_scored_when_the_shutter_fires() {
+            const CAPTURE_AT_SECONDS: f32 = 2.5;
+            let dt = 1.0 / 60.0;
+            let steps = (CAPTURE_AT_SECONDS / dt) as usize;
+
+            for seed in 0..64u64 {
+                let mut rng = StdRng::seed_from_u64(seed);
+                // The bird sprite is roughly 1.4:1, and the hitbox is 80% of the
+                // drawn quad; see `main`.
+                let mut game = GameState::new(game_config(Vec2::new(0.8 * 1.4, 0.8)), &mut rng);
+
+                for _ in 0..steps {
+                    if autopilot_wants_flap(&game) {
+                        game.flap();
+                    }
+                    game.update(dt, &mut rng);
+                }
+
+                assert!(!game.game_over, "seed {seed}: the autopilot crashed early");
+                assert!(game.score >= 1, "seed {seed}: nothing on the scoreboard yet");
+            }
+        }
+
+        #[test]
         fn restart_resets_score_bird_and_game_over() {
             let mut game = GameState::new(config(), &mut rng());
             game.bird.position.y = config().floor_y - 10.0;
@@ -549,23 +741,9 @@ fn main() {
     let bird_height = 1.0_f32;
     let bird_width = bird_height * bird_texture.aspect_ratio();
 
-    let config = GameConfig {
-        gravity: -16.0,
-        flap_velocity: 6.0,
-        floor_y: -4.2,
-        ceiling_y: 4.6,
-        bird_start: Vec2::new(-1.5, 0.0),
-        bird_size: Vec2::new(bird_width * 0.8, bird_height * 0.8),
-        pipe_width: 0.8,
-        pipe_gap: 2.2,
-        pipe_speed: 2.4,
-        pipe_spacing: 3.0,
-        first_pipe_x: 3.0,
-        pipe_count: 4,
-        gap_center_min: -2.3,
-        gap_center_max: 2.7,
-        respawn_x: -4.5,
-    };
+    // The hitbox is a little smaller than the drawn sprite, which is the
+    // traditional forgiveness in this genre.
+    let config = game_config(Vec2::new(bird_width * 0.8, bird_height * 0.8));
 
     let mut rng = rand::thread_rng();
     let mut game = GameState::new(config, &mut rng);
@@ -618,6 +796,12 @@ fn main() {
 
     // --- Per-frame mutable state the closure captures. ---
     let mut last_displayed_score = 0u32;
+    let mut capture = capture::Capture::from_env();
+    // The autopilot is its own switch rather than something `NEPTUNE_SCREENSHOT`
+    // implies, because the two screenshots the tutorial wants need opposite
+    // answers: the gameplay shot needs a bird that keeps flying, the game-over
+    // shot needs one that does not.
+    let autopilot = std::env::var("NEPTUNE_AUTOPILOT").as_deref() == Ok("1");
 
     renderer.render_loop(move |frame| {
         if frame.input().just_pressed(KeyCode::Escape) {
@@ -637,6 +821,8 @@ fn main() {
             } else {
                 game.flap();
             }
+        } else if autopilot && autopilot_wants_flap(&game) {
+            game.flap();
         }
         game.update(dt, &mut rng);
 
@@ -687,6 +873,8 @@ fn main() {
             text.visible = game.game_over;
         }
 
+        // No-op unless NEPTUNE_SCREENSHOT is set; must come before `render`.
+        capture.update(frame);
         frame.render(&scene, &camera);
     });
 }

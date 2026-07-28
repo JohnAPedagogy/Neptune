@@ -4,8 +4,14 @@
 //! both on the alpha-blended textured pipeline.
 //!
 //! Run it with `cargo run --example hello_sprite`. Press `Escape` to quit.
+//!
+//! Setting `NEPTUNE_SCREENSHOT=<path>` saves a frame and exits instead of
+//! waiting to be closed — see [`capture`].
 
 use neptune::prelude::*;
+
+#[path = "common/capture.rs"]
+mod capture;
 
 /// Builds a checkerboard texture in memory, so the example needs no asset file.
 fn checkerboard(size: u32, squares: u32, a: Color, b: Color) -> Texture {
@@ -58,6 +64,7 @@ fn main() {
 
     let mut score = 0u32;
     let mut next_tick = 1.0f32;
+    let mut capture = capture::Capture::from_env();
 
     renderer.render_loop(move |frame| {
         if frame.input().just_pressed(KeyCode::Escape) {
@@ -80,6 +87,8 @@ fn main() {
             }
         }
 
+        // No-op unless NEPTUNE_SCREENSHOT is set; must come before `render`.
+        capture.update(frame);
         frame.render(&scene, &camera);
     });
 }

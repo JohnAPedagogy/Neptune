@@ -4,8 +4,15 @@
 //! and that is the point.
 //!
 //! Run it with `cargo run --example hello_cube`. Press `Escape` to quit.
+//!
+//! Setting `NEPTUNE_SCREENSHOT=<path>` saves a frame and exits instead of
+//! waiting to be closed — see [`capture`], which is how the engine's
+//! documentation images are produced.
 
 use neptune::prelude::*;
+
+#[path = "common/capture.rs"]
+mod capture;
 
 fn main() {
     let mut renderer = Renderer::new(RendererOptions {
@@ -33,6 +40,7 @@ fn main() {
     );
 
     let mut angle: f32 = 0.0;
+    let mut capture = capture::Capture::from_env();
 
     renderer.render_loop(move |frame| {
         if frame.input().just_pressed(KeyCode::Escape) {
@@ -51,6 +59,8 @@ fn main() {
         // Keep the projection honest when the window is resized.
         camera.aspect = frame.aspect_ratio();
 
+        // No-op unless NEPTUNE_SCREENSHOT is set; must come before `render`.
+        capture.update(frame);
         frame.render(&scene, &camera);
     });
 }
