@@ -6,7 +6,9 @@
 //! problem of managing GPU resources.
 
 pub mod cameras;
+pub mod core;
 pub mod geometry;
 pub mod lights;
 pub mod materials;
 pub mod math;
+pub mod objects;
