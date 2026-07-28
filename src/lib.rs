@@ -6,4 +6,5 @@
 //! problem of managing GPU resources.
 
 pub mod geometry;
+pub mod materials;
 pub mod math;
