@@ -8,6 +8,7 @@
 pub mod cameras;
 pub mod core;
 pub mod geometry;
+pub mod input;
 pub mod lights;
 pub mod materials;
 pub mod math;
