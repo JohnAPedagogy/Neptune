@@ -17,3 +17,11 @@ winit = "0.30.13"
 
 [dev-dependencies]
 rand = "0.8"
+
+# Cargo examples default to `test = false`, which would leave the flappy_bird
+# example's game-logic tests (gravity, collision, scoring, recycling, restart)
+# running only under an explicit `cargo test --example flappy_bird`. Opting in
+# folds them into plain `cargo test`.
+[[example]]
+name = "flappy_bird"
+test = true

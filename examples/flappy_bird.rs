@@ -8,8 +8,8 @@
 //! - [`logic`] is plain Rust: gravity, pipe scrolling/recycling, collision and
 //!   scoring, over `glam` types and Task 1's `Aabb2d`. It never touches a
 //!   window, a renderer, or the GPU, so it is covered by ordinary `#[test]`s
-//!   at the bottom of the module and can be run with
-//!   `cargo test --example flappy_bird`.
+//!   at the bottom of the module. `Cargo.toml` sets `test = true` for this
+//!   example, so plain `cargo test` runs them alongside the library's own.
 //! - `main` is the winit/render plumbing: it owns a `neptune::Scene`, keeps a
 //!   handful of long-lived meshes in sync with `logic::GameState` every
 //!   frame, and never invents any game rules of its own.
