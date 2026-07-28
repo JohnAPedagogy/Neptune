@@ -18,7 +18,7 @@ use std::path::Path;
 
 use neptune::prelude::*;
 
-use logic::{GameConfig, GameState, clamp_delta};
+use logic::{GameConfig, GameState, bird_tilt_radians, clamp_delta};
 
 /// Gravity/velocity integration, pipe scrolling and recycling, collision, and
 /// scoring — everything a test can exercise without a GPU or a window.
@@ -48,6 +48,32 @@ mod logic {
     /// survives being dragged around the desktop.
     pub fn clamp_delta(delta_seconds: f32) -> f32 {
         delta_seconds.min(MAX_STEP_SECONDS)
+    }
+
+    /// The steepest the bird's nose ever tilts, up or down: 45 degrees. Past
+    /// that it stops reading as a climb or a dive and starts to look like a
+    /// tumble.
+    pub const MAX_TILT_RADIANS: f32 = std::f32::consts::FRAC_PI_4;
+
+    /// The vertical speed at which the tilt saturates, chosen to match
+    /// `GameConfig::flap_velocity` (6.0 in the real game): a fresh flap pins
+    /// the nose all the way up, and a fall that has built back up to the same
+    /// speed pins it all the way down. Under the real gravity of -16.0 that is
+    /// a little under half a second of falling, which is about how long the
+    /// bird spends between flaps.
+    const TILT_SATURATION_SPEED: f32 = 6.0;
+
+    /// Maps the bird's vertical velocity to the angle it should be drawn at,
+    /// in radians.
+    ///
+    /// Sign convention: the sprite faces +X and world Y points up, so a
+    /// *positive* rotation about +Z (counter-clockwise) swings the beak
+    /// upward. Rising therefore gives a positive, nose-up angle and falling a
+    /// negative, nose-down one — clamped either way to [`MAX_TILT_RADIANS`],
+    /// so the bird never rotates past 45 degrees and never loops.
+    pub fn bird_tilt_radians(velocity_y: f32) -> f32 {
+        (velocity_y / TILT_SATURATION_SPEED * MAX_TILT_RADIANS)
+            .clamp(-MAX_TILT_RADIANS, MAX_TILT_RADIANS)
     }
 
     /// The bird: a single point mass under gravity, nudged upward by flaps.
@@ -416,6 +442,31 @@ mod logic {
         }
 
         #[test]
+        fn a_level_bird_is_drawn_level_and_the_tilt_clamps_at_45_degrees() {
+            assert_eq!(bird_tilt_radians(0.0), 0.0);
+            assert!(
+                (MAX_TILT_RADIANS - 45.0_f32.to_radians()).abs() < 1e-6,
+                "MAX_TILT_RADIANS is {MAX_TILT_RADIANS}, not 45 degrees"
+            );
+            assert_eq!(bird_tilt_radians(1000.0), MAX_TILT_RADIANS);
+            assert_eq!(bird_tilt_radians(-1000.0), -MAX_TILT_RADIANS);
+            // A single flap is exactly enough to reach the cap.
+            assert_eq!(bird_tilt_radians(TILT_SATURATION_SPEED), MAX_TILT_RADIANS);
+        }
+
+        #[test]
+        fn the_tilt_points_the_nose_up_while_rising_and_down_while_falling() {
+            // Positive = counter-clockwise about +Z = beak up, because the
+            // sprite faces +X. See `bird_tilt_radians`.
+            assert!(bird_tilt_radians(1.0) > 0.0, "rising should be nose up");
+            assert!(bird_tilt_radians(-1.0) < 0.0, "falling should be nose down");
+            assert!(
+                bird_tilt_radians(3.0) > bird_tilt_radians(1.0),
+                "the tilt should grow with speed until it clamps"
+            );
+        }
+
+        #[test]
         fn clamping_saves_the_bird_from_a_frame_that_stalled_for_seconds() {
             // What a window drag/resize delivers on the next frame.
             let stalled = 3.0;
@@ -589,13 +640,15 @@ fn main() {
         }
         game.update(dt, &mut rng);
 
-        // Sync the bird: position from the simulation, plus a tilt from its
-        // vertical speed. The sprite itself never changes.
+        // Sync the bird: position from the simulation, plus a nose-up/nose-down
+        // tilt from its vertical speed. `rotation.z` is the in-plane roll for
+        // this orthographic, Z-facing view — the same field `hello_sprite`
+        // spins its sprite with. The sprite itself never changes.
         if let Some(bird) = scene.get_mut(bird_id) {
             let transform = bird.transform_mut();
             transform.position.x = game.bird.position.x;
             transform.position.y = game.bird.position.y;
-            transform.rotation.z = (game.bird.velocity * 0.06).clamp(-0.6, 1.0);
+            transform.rotation.z = bird_tilt_radians(game.bird.velocity);
         }
 
         // Sync every pipe pair's transform from its logical rectangle. The
