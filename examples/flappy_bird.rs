@@ -447,27 +447,23 @@ mod logic {
     }
 }
 
-/// Concrete alias for the sprite mesh type stored in the scene, so
-/// `Scene::get_mut_as` can downcast back to it.
-type SpriteMesh = Mesh<BufferGeometry<SimpleVertex>, SpriteMaterial>;
-
-/// Decodes the four bird-flap frames once at startup. Per Task 1's note that
-/// the texture cache never evicts, this is the only place these files are
-/// read — the render loop only ever clones the already-decoded `Texture`
-/// handles it built here.
-fn load_bird_frames() -> Vec<Texture> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/assets/flappy_bird");
-    (0..4)
-        .map(|i| {
-            let path = dir.join(format!("f{i}.png"));
-            Texture::from_file(&path)
-                .unwrap_or_else(|err| panic!("failed to decode {}: {err}", path.display()))
-        })
-        .collect()
+/// Decodes the bird sprite once at startup. Per Task 1's note that the texture
+/// cache never evicts, this is the only place the file is read.
+///
+/// `examples/assets/flappy_bird/` also holds `f0.png`, `f1.png` and `f2.png`,
+/// which this example deliberately does *not* load: despite the `f<n>` naming
+/// they are not frames of one animation (they are, respectively, a warp pipe, a
+/// differently-styled bird, and a scenery backdrop). `f3.png` is the only
+/// self-contained bird sprite, so the bird is drawn as a single static image.
+fn load_bird_texture() -> Texture {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples/assets/flappy_bird")
+        .join("f3.png");
+    Texture::from_file(&path)
+        .unwrap_or_else(|err| panic!("failed to decode {}: {err}", path.display()))
 }
 
 const VIEW_HEIGHT: f32 = 10.0;
-const BIRD_ANIMATION_FRAME_SECONDS: f32 = 0.12;
 
 /// Centres a text mesh horizontally on the world's vertical axis, which is
 /// also the middle of the screen for this example's camera.
@@ -498,9 +494,9 @@ fn main() {
     let mut camera =
         OrthographicCamera::from_size(VIEW_HEIGHT * 480.0 / 800.0, VIEW_HEIGHT, -100.0, 100.0);
 
-    let frames = load_bird_frames();
+    let bird_texture = load_bird_texture();
     let bird_height = 1.0_f32;
-    let bird_width = bird_height * frames[0].aspect_ratio();
+    let bird_width = bird_height * bird_texture.aspect_ratio();
 
     let config = GameConfig {
         gravity: -16.0,
@@ -547,7 +543,7 @@ fn main() {
 
     let mut bird_mesh = Mesh::new(
         PlaneGeometry::new(bird_width, bird_height),
-        SpriteMaterial::new(frames[0].clone()),
+        SpriteMaterial::new(bird_texture),
     );
     bird_mesh.transform.position = Vec3::new(config.bird_start.x, config.bird_start.y, 0.0);
     let bird_id = scene.add(bird_mesh);
@@ -570,8 +566,6 @@ fn main() {
     let game_over_id = scene.add(game_over_text);
 
     // --- Per-frame mutable state the closure captures. ---
-    let mut animation_timer = 0.0f32;
-    let mut animation_frame = 0usize;
     let mut last_displayed_score = 0u32;
 
     renderer.render_loop(move |frame| {
@@ -581,8 +575,8 @@ fn main() {
 
         camera.set_view_height(VIEW_HEIGHT, frame.aspect_ratio());
 
-        // Never hand the simulation (or the flap animation) a raw wall-clock
-        // delta: a window drag/resize blocks the event loop for as long as the
+        // Never hand the simulation a raw wall-clock delta: a window
+        // drag/resize blocks the event loop for as long as the
         // user holds the mouse, and the next frame's delta would tunnel the
         // bird through the world in one step. See `logic::clamp_delta`.
         let dt = clamp_delta(frame.delta_seconds());
@@ -595,24 +589,13 @@ fn main() {
         }
         game.update(dt, &mut rng);
 
-        // Sync the bird: position from the simulation, a small tilt from
-        // vertical speed, and a flip through the four flap frames.
+        // Sync the bird: position from the simulation, plus a tilt from its
+        // vertical speed. The sprite itself never changes.
         if let Some(bird) = scene.get_mut(bird_id) {
             let transform = bird.transform_mut();
             transform.position.x = game.bird.position.x;
             transform.position.y = game.bird.position.y;
             transform.rotation.z = (game.bird.velocity * 0.06).clamp(-0.6, 1.0);
-        }
-
-        if !game.game_over {
-            animation_timer += dt;
-            if animation_timer >= BIRD_ANIMATION_FRAME_SECONDS {
-                animation_timer -= BIRD_ANIMATION_FRAME_SECONDS;
-                animation_frame = (animation_frame + 1) % frames.len();
-                if let Some(bird) = scene.get_mut_as::<SpriteMesh>(bird_id) {
-                    bird.material.texture = frames[animation_frame].clone();
-                }
-            }
         }
 
         // Sync every pipe pair's transform from its logical rectangle. The
