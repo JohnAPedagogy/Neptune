@@ -8,6 +8,7 @@
 pub(crate) mod command;
 pub(crate) mod context;
 pub(crate) mod pass;
+pub(crate) mod screenshot;
 pub(crate) mod shaders;
 pub(crate) mod surface;
 pub(crate) mod texture;

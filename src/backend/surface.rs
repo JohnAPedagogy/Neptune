@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use vulkano::format::Format;
-use vulkano::image::ImageUsage;
 use vulkano::image::view::ImageView;
+use vulkano::image::{Image, ImageUsage};
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::render_pass::{Framebuffer, RenderPass};
 use vulkano::swapchain::{PresentMode, Surface, Swapchain, SwapchainCreateInfo};
@@ -20,10 +20,20 @@ use super::pass::{create_depth_view, create_framebuffers};
 /// the window resizes or the driver reports the swapchain stale.
 pub(crate) struct SurfaceState {
     pub swapchain: Arc<Swapchain>,
+    /// The swapchain's colour images, in the same order as `framebuffers`, so
+    /// an `image_index` handed out by `acquire_next_image` indexes both.
+    ///
+    /// The framebuffers already own views onto these; they are kept separately
+    /// because a copy-out (see `backend::screenshot`) needs the `Image` itself,
+    /// not a view of it.
+    pub images: Vec<Arc<Image>>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
     pub depth_view: Arc<ImageView>,
     pub viewport: Viewport,
     pub recreate_needed: bool,
+    /// Whether the swapchain was created with [`ImageUsage::TRANSFER_SRC`], and
+    /// so whether a frame can be copied back out of it for a screenshot.
+    pub transfer_src: bool,
 }
 
 /// The colour format the swapchain will use — queried before the render pass
@@ -53,6 +63,21 @@ impl SurfaceState {
         let window_size = window.inner_size();
         let extent = [window_size.width.max(1), window_size.height.max(1)];
 
+        // TRANSFER_SRC is what lets a finished frame be copied straight out of
+        // its swapchain image into a host-visible buffer, which is how
+        // `Frame::save_screenshot` works. Every desktop driver advertises it,
+        // but asking for it unconditionally would turn an exotic surface that
+        // does not into a hard failure to create a swapchain at all — so it is
+        // only requested when the surface offers it, and screenshots degrade to
+        // a diagnostic instead.
+        let transfer_src = capabilities
+            .supported_usage_flags
+            .contains(ImageUsage::TRANSFER_SRC);
+        let mut image_usage = ImageUsage::COLOR_ATTACHMENT;
+        if transfer_src {
+            image_usage |= ImageUsage::TRANSFER_SRC;
+        }
+
         let (swapchain, images) = Swapchain::new(
             ctx.device.clone(),
             surface.clone(),
@@ -60,7 +85,7 @@ impl SurfaceState {
                 min_image_count: capabilities.min_image_count.max(2),
                 image_format,
                 image_extent: extent,
-                image_usage: ImageUsage::COLOR_ATTACHMENT,
+                image_usage,
                 composite_alpha: capabilities
                     .supported_composite_alpha
                     .into_iter()
@@ -77,6 +102,7 @@ impl SurfaceState {
 
         SurfaceState {
             swapchain,
+            images,
             framebuffers,
             depth_view,
             viewport: Viewport {
@@ -85,6 +111,7 @@ impl SurfaceState {
                 depth_range: 0.0..=1.0,
             },
             recreate_needed: false,
+            transfer_src,
         }
     }
 
@@ -118,6 +145,9 @@ impl SurfaceState {
 
         self.depth_view = create_depth_view(&ctx.memory_allocator, extent);
         self.framebuffers = create_framebuffers(render_pass, &images, &self.depth_view);
+        // `create_info()` carries the original `image_usage` over, so a
+        // recreated swapchain keeps TRANSFER_SRC if the first one had it.
+        self.images = images;
         self.swapchain = swapchain;
         self.viewport.extent = [extent[0] as f32, extent[1] as f32];
         self.recreate_needed = false;

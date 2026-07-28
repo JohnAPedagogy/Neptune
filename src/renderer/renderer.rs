@@ -1,11 +1,13 @@
 //! The window, the event loop, and the per-frame GPU state behind them.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
-    SubpassContents, SubpassEndInfo,
+    AutoCommandBufferBuilder, CommandBufferUsage, CopyImageToBufferInfo, PrimaryAutoCommandBuffer,
+    RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo,
 };
 use vulkano::instance::Instance;
 use vulkano::render_pass::RenderPass;
@@ -23,6 +25,7 @@ use super::frame::Frame;
 use crate::backend::command::{RenderCaches, record_scene};
 use crate::backend::context::{VulkanContext, create_instance};
 use crate::backend::pass::create_render_pass;
+use crate::backend::screenshot::{self, ScreenshotError};
 use crate::backend::surface::{SurfaceState, preferred_surface_format};
 use crate::cameras::Camera;
 use crate::core::Scene;
@@ -114,6 +117,9 @@ pub(super) struct RenderState {
     surface_state: SurfaceState,
     caches: RenderCaches,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
+    /// Where the next rendered frame should also be written as a PNG, set by
+    /// [`Frame::save_screenshot`] and taken by the next [`RenderState::render`].
+    pending_screenshot: Option<PathBuf>,
 }
 
 impl RenderState {
@@ -139,7 +145,13 @@ impl RenderState {
             surface_state,
             caches,
             previous_frame_end,
+            pending_screenshot: None,
         }
+    }
+
+    /// Marks the next rendered frame for capture into `path`.
+    pub(super) fn request_screenshot(&mut self, path: PathBuf) {
+        self.pending_screenshot = Some(path);
     }
 
     /// Reclaims finished frames and rebuilds the swapchain if it went stale.
@@ -217,6 +229,22 @@ impl RenderState {
             .end_render_pass(SubpassEndInfo::default())
             .expect("failed to end the render pass");
 
+        // A requested screenshot rides along in this same command buffer: the
+        // copy is recorded after the render pass has stored its colour
+        // attachment, so it reads the finished frame, and before the present,
+        // so nothing else has touched the image yet. Vulkano's automatic
+        // synchronisation inserts the PresentSrc -> TransferSrcOptimal barrier
+        // and the one back again.
+        let capture = self.pending_screenshot.take().and_then(|path| {
+            match self.record_screenshot_copy(&mut builder, image_index) {
+                Ok(buffer) => Some((path, buffer)),
+                Err(err) => {
+                    eprintln!("neptune: screenshot failed: {err}");
+                    None
+                }
+            }
+        });
+
         let command_buffer = builder.build().expect("failed to build the command buffer");
 
         let future = self
@@ -236,7 +264,25 @@ impl RenderState {
             .then_signal_fence_and_flush();
 
         match future {
-            Ok(future) => self.previous_frame_end = Some(future.boxed()),
+            Ok(future) => {
+                if let Some((path, buffer)) = capture {
+                    // The only place Neptune ever blocks on the GPU mid-loop.
+                    // The fence covers the whole submission, copy included, so
+                    // once it is signalled the read-back buffer holds this
+                    // frame. Screenshots are a one-shot debugging/documentation
+                    // tool, not a hot path, so the stall is the right trade.
+                    future
+                        .wait(None)
+                        .expect("the captured frame's fence never signalled");
+                    let extent = self.surface_state.extent();
+                    let format = self.surface_state.swapchain.image_format();
+                    match screenshot::write_png(&buffer, extent, format, &path) {
+                        Ok(()) => eprintln!("neptune: wrote screenshot to {}", path.display()),
+                        Err(err) => eprintln!("neptune: screenshot failed: {err}"),
+                    }
+                }
+                self.previous_frame_end = Some(future.boxed());
+            }
             Err(Validated::Error(VulkanError::OutOfDate)) => {
                 self.surface_state.recreate_needed = true;
                 self.previous_frame_end = Some(sync::now(self.ctx.device.clone()).boxed());
@@ -246,6 +292,35 @@ impl RenderState {
                 self.previous_frame_end = Some(sync::now(self.ctx.device.clone()).boxed());
             }
         }
+    }
+
+    /// Allocates a read-back buffer and records the copy of swapchain image
+    /// `image_index` into it.
+    ///
+    /// Split out of [`RenderState::render`] purely so the fallible setup can
+    /// use `?` and be reported in one place; the returned buffer is not
+    /// readable until the frame's fence signals.
+    fn record_screenshot_copy(
+        &self,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+        image_index: u32,
+    ) -> Result<Subbuffer<[u8]>, ScreenshotError> {
+        if !self.surface_state.transfer_src {
+            return Err(ScreenshotError::NotSupported);
+        }
+        // Fail before recording anything if the format is one this build has no
+        // unpacking rule for, rather than capturing bytes nothing can decode.
+        screenshot::swaps_red_and_blue(self.surface_state.swapchain.image_format())?;
+
+        let extent = self.surface_state.extent();
+        let buffer = screenshot::readback_buffer(&self.ctx.memory_allocator, extent)?;
+        let image = self.surface_state.images[image_index as usize].clone();
+
+        builder
+            .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(image, buffer.clone()))
+            .expect("failed to record the screenshot copy");
+
+        Ok(buffer)
     }
 
     pub(super) fn aspect_ratio(&self) -> f32 {

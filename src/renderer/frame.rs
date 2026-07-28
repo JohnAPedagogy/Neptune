@@ -1,5 +1,7 @@
 //! The borrowed handle the render-loop closure gets for one frame.
 
+use std::path::PathBuf;
+
 use super::clock::FrameTime;
 use super::renderer::RenderState;
 use crate::cameras::Camera;
@@ -39,6 +41,34 @@ impl<'a> Frame<'a> {
     /// and presents a swapchain image.
     pub fn render(&mut self, scene: &Scene, camera: &dyn Camera) {
         self.state.render(scene, camera);
+    }
+
+    /// Also writes the next frame this `Frame` renders to `path` as a PNG.
+    ///
+    /// Call it *before* [`Frame::render`]: the capture is a copy recorded into
+    /// the same command buffer as the draw calls, so it can only be arranged
+    /// while the frame is still being built. A request made after `render` (or
+    /// on a frame that never renders) simply carries over to the next frame
+    /// that does draw.
+    ///
+    /// The image is the window's framebuffer at its current size, written with
+    /// a fully opaque alpha channel. Missing parent directories are created.
+    ///
+    /// This blocks until the GPU has finished the frame, so it is a tool for
+    /// screenshots and documentation, not something to call every frame.
+    /// Failures (an unwritable path, a surface that cannot be copied from) are
+    /// reported on stderr rather than returned — capturing a picture is never
+    /// load-bearing for the program that asked for it.
+    ///
+    /// ```no_run
+    /// # use neptune::prelude::*;
+    /// # fn demo(frame: &mut Frame, scene: &Scene, camera: &dyn Camera) {
+    /// frame.save_screenshot("screenshot.png");
+    /// frame.render(scene, camera);
+    /// # }
+    /// ```
+    pub fn save_screenshot(&mut self, path: impl Into<PathBuf>) {
+        self.state.request_screenshot(path.into());
     }
 
     /// Seconds since the previous frame — multiply your per-second velocities
