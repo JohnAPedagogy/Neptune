@@ -16,7 +16,7 @@ fn next_geometry_id() -> GeometryId {
 /// Generic over the vertex type so a project can define its own layout; the
 /// built-in shaders understand [`SimpleVertex`], and `Geometry` (the trait the
 /// renderer draws through) is implemented for that instantiation.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BufferGeometry<V: Vertex> {
     vertices: Vec<V>,
     indices: Vec<u32>,
@@ -63,6 +63,24 @@ impl<V: Vertex> BufferGeometry<V> {
     }
 }
 
+/// Cloning produces an independent geometry, with a *fresh* identity.
+///
+/// A derived `Clone` would copy `id` and `revision` verbatim, and [`GeometryId`]
+/// is the key of the renderer's GPU buffer cache — so the copy would share the
+/// original's cache slot while owning its own CPU-side vertices. Edit either
+/// one and both draw whatever was uploaded last; leave their revisions
+/// disagreeing and the cache re-uploads every frame. Since the two halves can
+/// diverge, the clone is simply a new geometry that starts out holding the same
+/// mesh: new id, revision back to zero.
+///
+/// (`Texture` avoids the same trap the other way round, by keeping its id inside
+/// an `Arc`, where cloning genuinely does mean "the same GPU upload".)
+impl<V: Vertex> Clone for BufferGeometry<V> {
+    fn clone(&self) -> Self {
+        BufferGeometry::new(self.vertices.clone(), self.indices.clone())
+    }
+}
+
 impl Geometry for BufferGeometry<SimpleVertex> {
     fn vertices(&self) -> &[SimpleVertex] {
         &self.vertices
@@ -94,6 +112,35 @@ mod tests {
         let a = BufferGeometry::new(vec![vertex(0.0)], vec![0]);
         let b = BufferGeometry::new(vec![vertex(0.0)], vec![0]);
         assert_ne!(a.id(), b.id());
+    }
+
+    #[test]
+    fn cloning_mints_a_fresh_id_and_resets_the_revision() {
+        let mut original = BufferGeometry::new(vec![vertex(0.0)], vec![0]);
+        original.set_mesh(vec![vertex(1.0), vertex(2.0)], vec![0, 1]);
+        assert_eq!(original.revision(), 1);
+
+        let first = original.clone();
+        let second = original.clone();
+
+        assert_ne!(
+            first.id(),
+            original.id(),
+            "a clone must not alias the original's GPU cache slot"
+        );
+        assert_ne!(
+            first.id(),
+            second.id(),
+            "nor may two clones alias each other"
+        );
+        assert_eq!(first.revision(), 0, "a fresh id has never been uploaded");
+
+        // The mesh data itself is still copied faithfully.
+        assert_eq!(
+            BufferGeometry::vertices(&first),
+            BufferGeometry::vertices(&original)
+        );
+        assert_eq!(first.indices(), original.indices());
     }
 
     #[test]
