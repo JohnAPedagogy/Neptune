@@ -18,7 +18,7 @@ use std::path::Path;
 
 use neptune::prelude::*;
 
-use logic::{GameConfig, GameState};
+use logic::{GameConfig, GameState, clamp_delta};
 
 /// Gravity/velocity integration, pipe scrolling and recycling, collision, and
 /// scoring — everything a test can exercise without a GPU or a window.
@@ -30,6 +30,25 @@ mod logic {
     /// visually (and for collision purposes) reaches off the edge of the
     /// screen rather than stopping exactly at the gap.
     const PIPE_OVERDRAW: f32 = 12.0;
+
+    /// The longest simulation step the game will take in one frame, ~3 frames'
+    /// worth at 60Hz.
+    pub const MAX_STEP_SECONDS: f32 = 0.05;
+
+    /// Clamps a raw wall-clock frame delta down to something the simulation can
+    /// integrate in a single step.
+    ///
+    /// `Frame::delta_seconds` deliberately reports the real elapsed time, and
+    /// an OS-modal window drag or resize blocks the whole event loop — so the
+    /// first frame afterwards can carry a multi-second delta. Fed straight into
+    /// `Bird::integrate` that moves the bird hundreds of world units in one
+    /// step, which slams it into the ground for an instant, unavoidable game
+    /// over (and scrolls pipes clean past it without ever overlapping). Capping
+    /// the step trades a little slow-motion after a stall for a game that
+    /// survives being dragged around the desktop.
+    pub fn clamp_delta(delta_seconds: f32) -> f32 {
+        delta_seconds.min(MAX_STEP_SECONDS)
+    }
 
     /// The bird: a single point mass under gravity, nudged upward by flaps.
     #[derive(Debug, Clone, Copy, PartialEq)]
@@ -391,6 +410,29 @@ mod logic {
         }
 
         #[test]
+        fn clamp_delta_caps_a_stalled_frame_and_passes_a_normal_one_through() {
+            assert_eq!(clamp_delta(1.0 / 60.0), 1.0 / 60.0);
+            assert_eq!(clamp_delta(4.2), MAX_STEP_SECONDS);
+        }
+
+        #[test]
+        fn clamping_saves_the_bird_from_a_frame_that_stalled_for_seconds() {
+            // What a window drag/resize delivers on the next frame.
+            let stalled = 3.0;
+
+            let mut raw = GameState::new(config(), &mut rng());
+            raw.update(stalled, &mut rng());
+            assert!(
+                raw.game_over,
+                "the unclamped delta drives the bird straight into the ground"
+            );
+
+            let mut clamped = GameState::new(config(), &mut rng());
+            clamped.update(clamp_delta(stalled), &mut rng());
+            assert!(!clamped.game_over);
+        }
+
+        #[test]
         fn restart_resets_score_bird_and_game_over() {
             let mut game = GameState::new(config(), &mut rng());
             game.bird.position.y = config().floor_y - 10.0;
@@ -521,7 +563,11 @@ fn main() {
 
         camera.set_view_height(VIEW_HEIGHT, frame.aspect_ratio());
 
-        let dt = frame.delta_seconds();
+        // Never hand the simulation (or the flap animation) a raw wall-clock
+        // delta: a window drag/resize blocks the event loop for as long as the
+        // user holds the mouse, and the next frame's delta would tunnel the
+        // bird through the world in one step. See `logic::clamp_delta`.
+        let dt = clamp_delta(frame.delta_seconds());
         if frame.input().just_pressed(KeyCode::Space) {
             if game.game_over {
                 game.restart(&mut rng);
