@@ -5,6 +5,8 @@
 //! ownership, borrowing and lifetime rules map cleanly onto the very real
 //! problem of managing GPU resources.
 
+mod backend;
+
 pub mod cameras;
 pub mod core;
 pub mod geometry;
@@ -13,3 +15,4 @@ pub mod lights;
 pub mod materials;
 pub mod math;
 pub mod objects;
+pub mod renderer;
