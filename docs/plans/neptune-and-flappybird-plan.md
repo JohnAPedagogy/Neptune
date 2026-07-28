@@ -315,3 +315,74 @@ vs. exposes" style table, a complete-code walkthrough section, a closing exercis
 Read the file back; confirm code excerpts match the real Task 1/2 implementation verbatim, and
 that it reads coherently as a standalone tutorial (a reader who hasn't seen this plan should be
 able to follow it using only this doc plus the two referenced arch docs).
+
+---
+
+## Task 5: Renderer screenshot capability + real tutorial images
+
+**Depends on:** Tasks 1, 2, and 4 (needs the engine, the Flappy Bird example, and the tutorial
+doc to embed images into).
+
+**Where:** Part A is engine code in this repo (`Lenovo/Neptune`, current branch). Part B writes
+image files and edits Markdown in the same non-git directory as Tasks 3/4:
+`C:\work\Favorites\resources\ee\dds\005 Dev\005.13 Specific Languages\rustut\hardparts\arch\`.
+
+### Part A — Screenshot capability
+
+Add a way to capture a single rendered frame to a PNG file, so real engine output can illustrate
+the book's tutorial docs (previously out of scope per `neptune_plan.md` §9 Layer 2's full
+headless-PPM-snapshot infrastructure — this is a much smaller, one-shot version of the same idea,
+not that whole subsystem).
+
+- Add `ImageUsage::TRANSFER_SRC` to the swapchain's image usage flags (`backend/surface.rs`) so a
+  swapchain image can be copied out of.
+- Add a small public API — e.g. `Frame::save_screenshot(&mut self, path: impl AsRef<Path>)` — that
+  marks the current frame for capture. On the frame `RenderState::render` handles, when a capture
+  was requested: after recording the normal draw commands, also record a copy-image-to-buffer
+  command into a freshly allocated host-visible `Subbuffer<[u8]>` sized for the current swapchain
+  extent; after submitting, block on the fence (`.wait(None)`) instead of the usual fire-and-forget
+  present chain (acceptable — screenshots are not a hot path); then convert the raw pixel bytes
+  (mind the swapchain's actual format — likely BGRA — swizzle to RGBA if needed) and write a PNG
+  via the `image` crate (already a dependency, already used for texture loading — reuse it, don't
+  add a second image-writing crate).
+- Unit-test whatever of this is pure (e.g. a BGRA→RGBA swizzle helper) without a GPU. The
+  GPU-touching capture path itself is verified by Part B actually producing real, valid PNG files
+  (decode them back and assert on dimensions/non-uniform pixel content as the smoke test — you
+  cannot visually confirm correctness, and that's fine, same bar as every other GPU-touching test
+  in this plan).
+
+### Part B — Real screenshots for the tutorials
+
+Using the new capability, capture and save actual PNG screenshots (not placeholders, not
+hand-drawn) into a new `arch/images/` directory alongside the existing `arch/` docs:
+
+- One screenshot of `examples/hello_cube.rs` (or `hello_sprite.rs` if more visually interesting —
+  your call) → `arch/images/neptune_hello_cube.png`.
+- One or two screenshots of `examples/flappy_bird.rs` mid-game (bird + pipes visible) and,
+  ideally, the game-over screen with score text visible → `arch/images/flappy_bird_gameplay.png`
+  and/or `arch/images/flappy_bird_gameover.png`.
+
+You will need a small way to trigger a capture at a useful moment (e.g. a temporary CLI flag or
+keypress wired to `Frame::save_screenshot` for this purpose, or a short-lived modification to the
+example that captures after N frames/seconds then exits) — use your judgment on the least
+intrusive way to do this; if you add a temporary flag/keybinding to the examples to make capture
+possible, that's fine and expected, just don't leave it as unexplained dead code — a one-line doc
+comment on why it's there is enough.
+
+Then edit `workshop_flappybird_neptune.md` and `workshop01_vulkano_triangle.md` (or wherever most
+apt — your judgment, but at least the Flappy Bird tutorial should gain the gameplay image) to
+embed the relevant image(s) via standard Markdown (`![alt text](images/filename.png)`), placed
+where they add the most value (e.g. near the game-loop walkthrough, or near the top as a "what
+you'll build" preview).
+
+### Verification
+
+- `cargo test` (screenshot-adjacent unit tests) and `cargo build --example hello_cube`/`flappy_bird`
+  still clean.
+- Confirm each generated PNG actually exists, has plausible dimensions matching the window size,
+  and decodes successfully via the `image` crate read back in a quick check (not just "a file
+  exists" — actually open it and confirm it parses as a valid image with non-trivial content,
+  e.g. more than one distinct pixel color).
+- Confirm the edited Markdown files render the images with correct relative paths (the images
+  live in `arch/images/`, the docs live in `arch/` — a relative path of `images/filename.png` from
+  either doc should resolve correctly).
