@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+
+# MSVC debug info
+*.pdb
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Note: Cargo.lock is deliberately tracked. Neptune ships runnable examples and
+# a Vulkan backend pinned to exact vulkano/winit versions, so reproducible
+# builds matter more than dependency-range flexibility.
