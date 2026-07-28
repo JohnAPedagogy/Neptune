@@ -503,10 +503,9 @@ fn main() {
     score_text.transform.scale = Vec3::splat(0.9);
     let score_id = scene.add(score_text);
 
-    let mut game_over_text =
-        TextMesh::with_color(atlas, "Game Over - space to restart", Color::hex(0xff5555));
-    game_over_text.transform.position = Vec3::new(-1.9, 0.0, 0.0);
-    game_over_text.transform.scale = Vec3::splat(0.4);
+    let mut game_over_text = TextMesh::with_color(atlas, "GAME OVER - SPACE", Color::hex(0xff5555));
+    game_over_text.transform.position = Vec3::new(-2.3, 0.0, 0.0);
+    game_over_text.transform.scale = Vec3::splat(0.3);
     game_over_text.visible = false;
     let game_over_id = scene.add(game_over_text);
 
