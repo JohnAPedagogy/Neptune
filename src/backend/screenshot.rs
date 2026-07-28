@@ -45,9 +45,14 @@ impl fmt::Display for ScreenshotError {
                 write!(f, "this surface's swapchain images cannot be copied from")
             }
             ScreenshotError::UnsupportedFormat(format) => {
-                write!(f, "swapchain format {format:?} is not an 8-bit RGBA/BGRA layout")
+                write!(
+                    f,
+                    "swapchain format {format:?} is not an 8-bit RGBA/BGRA layout"
+                )
             }
-            ScreenshotError::Allocate(err) => write!(f, "failed to allocate a read-back buffer: {err}"),
+            ScreenshotError::Allocate(err) => {
+                write!(f, "failed to allocate a read-back buffer: {err}")
+            }
             ScreenshotError::Write(err) => write!(f, "failed to write the PNG: {err}"),
             ScreenshotError::Io(err) => write!(f, "failed to prepare the output directory: {err}"),
         }

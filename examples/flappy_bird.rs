@@ -671,7 +671,10 @@ mod logic {
                 }
 
                 assert!(!game.game_over, "seed {seed}: the autopilot crashed early");
-                assert!(game.score >= 1, "seed {seed}: nothing on the scoreboard yet");
+                assert!(
+                    game.score >= 1,
+                    "seed {seed}: nothing on the scoreboard yet"
+                );
             }
         }
 

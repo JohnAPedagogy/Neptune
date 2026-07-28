@@ -284,13 +284,26 @@ impl RenderState {
                 self.previous_frame_end = Some(future.boxed());
             }
             Err(Validated::Error(VulkanError::OutOfDate)) => {
+                self.rearm_dropped_capture(capture);
                 self.surface_state.recreate_needed = true;
                 self.previous_frame_end = Some(sync::now(self.ctx.device.clone()).boxed());
             }
             Err(err) => {
                 eprintln!("neptune: dropped a frame ({err})");
+                self.rearm_dropped_capture(capture);
                 self.previous_frame_end = Some(sync::now(self.ctx.device.clone()).boxed());
             }
+        }
+    }
+
+    /// Re-queues a screenshot whose frame was never submitted.
+    ///
+    /// A dropped frame takes the copy command down with it, so without this the
+    /// request would be silently swallowed and a caller that asked for a
+    /// screenshot and then exited would get no file and no explanation.
+    fn rearm_dropped_capture(&mut self, capture: Option<(PathBuf, Subbuffer<[u8]>)>) {
+        if let Some((path, _)) = capture {
+            self.pending_screenshot = Some(path);
         }
     }
 
