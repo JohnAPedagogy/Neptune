@@ -14,3 +14,6 @@ image = "0.25.10"
 vulkano = "0.35.2"
 vulkano-shaders = "0.35.0"
 winit = "0.30.13"
+
+[dev-dependencies]
+rand = "0.8"
