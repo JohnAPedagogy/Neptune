@@ -25,12 +25,7 @@ impl BoxGeometry {
             // +Z front
             (
                 [0.0, 0.0, 1.0],
-                [
-                    [-hx, -hy, hz],
-                    [hx, -hy, hz],
-                    [hx, hy, hz],
-                    [-hx, hy, hz],
-                ],
+                [[-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz]],
             ),
             // -Z back
             (
@@ -45,12 +40,7 @@ impl BoxGeometry {
             // +X right
             (
                 [1.0, 0.0, 0.0],
-                [
-                    [hx, -hy, hz],
-                    [hx, -hy, -hz],
-                    [hx, hy, -hz],
-                    [hx, hy, hz],
-                ],
+                [[hx, -hy, hz], [hx, -hy, -hz], [hx, hy, -hz], [hx, hy, hz]],
             ),
             // -X left
             (
@@ -65,12 +55,7 @@ impl BoxGeometry {
             // +Y top
             (
                 [0.0, 1.0, 0.0],
-                [
-                    [-hx, hy, hz],
-                    [hx, hy, hz],
-                    [hx, hy, -hz],
-                    [-hx, hy, -hz],
-                ],
+                [[-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz], [-hx, hy, -hz]],
             ),
             // -Y bottom
             (
@@ -129,9 +114,18 @@ mod tests {
     #[test]
     fn dimensions_are_centred_half_extents() {
         let g = BoxGeometry::new(2.0, 4.0, 6.0);
-        let xs: Vec<f32> = Geometry::vertices(&g).iter().map(|v| v.position[0]).collect();
-        let ys: Vec<f32> = Geometry::vertices(&g).iter().map(|v| v.position[1]).collect();
-        let zs: Vec<f32> = Geometry::vertices(&g).iter().map(|v| v.position[2]).collect();
+        let xs: Vec<f32> = Geometry::vertices(&g)
+            .iter()
+            .map(|v| v.position[0])
+            .collect();
+        let ys: Vec<f32> = Geometry::vertices(&g)
+            .iter()
+            .map(|v| v.position[1])
+            .collect();
+        let zs: Vec<f32> = Geometry::vertices(&g)
+            .iter()
+            .map(|v| v.position[2])
+            .collect();
         assert_eq!(xs.iter().cloned().fold(f32::MIN, f32::max), 1.0);
         assert_eq!(ys.iter().cloned().fold(f32::MIN, f32::max), 2.0);
         assert_eq!(zs.iter().cloned().fold(f32::MIN, f32::max), 3.0);
@@ -144,10 +138,9 @@ mod tests {
     fn every_normal_is_unit_length() {
         let g = BoxGeometry::cube(1.0);
         for v in Geometry::vertices(&g) {
-            let len = (v.normal[0] * v.normal[0]
-                + v.normal[1] * v.normal[1]
-                + v.normal[2] * v.normal[2])
-                .sqrt();
+            let len =
+                (v.normal[0] * v.normal[0] + v.normal[1] * v.normal[1] + v.normal[2] * v.normal[2])
+                    .sqrt();
             assert!((len - 1.0).abs() < 1e-6);
         }
     }

@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use vulkano::VulkanLibrary;
 use vulkano::command_buffer::allocator::{
     StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
 };
@@ -14,7 +15,6 @@ use vulkano::device::{
 use vulkano::instance::{Instance, InstanceCreateInfo};
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::swapchain::Surface;
-use vulkano::VulkanLibrary;
 use winit::event_loop::EventLoop;
 
 /// Everything device-level that outlives any one window or frame.

@@ -129,6 +129,7 @@ impl Texture {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use image::ImageEncoder as _;
 
     #[test]
     fn from_rgba8_accepts_a_correctly_sized_buffer() {
@@ -162,5 +163,47 @@ mod tests {
     fn aspect_ratio_is_width_over_height() {
         let t = Texture::from_rgba8(4, 2, vec![0u8; 32]).unwrap();
         assert_eq!(t.aspect_ratio(), 2.0);
+    }
+
+    /// A 2x2 PNG: red, green, blue, half-transparent white.
+    fn sample_png() -> Vec<u8> {
+        let pixels: Vec<u8> = vec![
+            255, 0, 0, 255, //
+            0, 255, 0, 255, //
+            0, 0, 255, 255, //
+            255, 255, 255, 128,
+        ];
+        let mut encoded = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut encoded)
+            .write_image(&pixels, 2, 2, image::ExtendedColorType::Rgba8)
+            .expect("encoding a 2x2 PNG succeeds");
+        encoded
+    }
+
+    #[test]
+    fn from_encoded_bytes_decodes_a_png_to_rgba() {
+        let t = Texture::from_encoded_bytes(&sample_png()).expect("the PNG decodes");
+        assert_eq!((t.width(), t.height()), (2, 2));
+        assert_eq!(&t.rgba()[0..4], &[255, 0, 0, 255]);
+        assert_eq!(&t.rgba()[12..16], &[255, 255, 255, 128]);
+    }
+
+    #[test]
+    fn from_file_decodes_an_image_on_disk() {
+        let path = std::env::temp_dir().join("neptune_texture_test.png");
+        std::fs::write(&path, sample_png()).expect("temp file is writable");
+
+        let t = Texture::from_file(&path).expect("the file decodes");
+        assert_eq!((t.width(), t.height()), (2, 2));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn from_file_reports_an_error_for_a_missing_file() {
+        assert!(matches!(
+            Texture::from_file("no-such-image-491723.png"),
+            Err(TextureError::Decode(_))
+        ));
     }
 }

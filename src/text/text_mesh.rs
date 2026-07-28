@@ -242,7 +242,10 @@ mod tests {
         assert_eq!(mesh.renderable().unwrap().material.bind().color, Color::RED);
 
         mesh.set_color(Color::BLUE);
-        assert_eq!(mesh.renderable().unwrap().material.bind().color, Color::BLUE);
+        assert_eq!(
+            mesh.renderable().unwrap().material.bind().color,
+            Color::BLUE
+        );
     }
 
     #[test]

@@ -78,7 +78,10 @@ mod tests {
         let m = SpriteMaterial::new(texture.clone());
         assert_eq!(m.material_id(), MaterialId::Sprite);
         let binding = m.bind();
-        assert_eq!(binding.texture.expect("sprite always has a texture").id(), texture.id());
+        assert_eq!(
+            binding.texture.expect("sprite always has a texture").id(),
+            texture.id()
+        );
         assert_eq!(binding.color, Color::WHITE);
     }
 

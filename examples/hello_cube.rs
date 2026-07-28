@@ -16,12 +16,7 @@ fn main() {
 
     let mut scene = Scene::new();
 
-    let mut camera = PerspectiveCamera::new(
-        75.0_f32.to_radians(),
-        1280.0 / 720.0,
-        0.1,
-        1000.0,
-    );
+    let mut camera = PerspectiveCamera::new(75.0_f32.to_radians(), 1280.0 / 720.0, 0.1, 1000.0);
 
     let geometry = BoxGeometry::new(1.0, 1.0, 1.0);
     let material = MeshBasicMaterial::new(Color::hex(0x00ff88));
@@ -33,7 +28,9 @@ fn main() {
     // Unlit materials ignore these, but a scene is where lights live and this
     // is what adding them looks like.
     scene.add_light(AmbientLight::new(Color::WHITE, 0.2));
-    scene.add_light(DirectionalLight::new(Color::WHITE, 0.8).with_direction(Vec3::new(-0.4, -1.0, -0.6)));
+    scene.add_light(
+        DirectionalLight::new(Color::WHITE, 0.8).with_direction(Vec3::new(-0.4, -1.0, -0.6)),
+    );
 
     let mut angle: f32 = 0.0;
 

@@ -44,18 +44,8 @@ pub trait Material {
     fn bind(&self) -> MaterialBinding<'_>;
 }
 
-/// A process-unique identity for one material *instance*.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct MaterialInstanceId(pub(crate) u64);
-
-static NEXT_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
-
-impl MaterialInstanceId {
-    pub(crate) fn next() -> Self {
-        MaterialInstanceId(NEXT_INSTANCE_ID.fetch_add(1, Ordering::Relaxed))
-    }
-}
-
+/// Lets a `Box<dyn Material>` be used wherever a `Material` is expected, so a
+/// `Mesh` can carry a material chosen at runtime.
 impl<M: Material + ?Sized> Material for Box<M> {
     fn material_id(&self) -> MaterialId {
         (**self).material_id()
@@ -70,12 +60,53 @@ impl<M: Material + ?Sized> Material for Box<M> {
     }
 }
 
+/// A process-unique identity for one material *instance*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct MaterialInstanceId(pub(crate) u64);
+
+static NEXT_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
+
+impl MaterialInstanceId {
+    pub(crate) fn next() -> Self {
+        MaterialInstanceId(NEXT_INSTANCE_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::Object3D;
+    use crate::geometry::BoxGeometry;
+    use crate::materials::{MeshBasicMaterial, SpriteMaterial, Texture};
+    use crate::math::Color;
+    use crate::objects::Mesh;
 
     #[test]
     fn instance_ids_are_unique() {
         assert_ne!(MaterialInstanceId::next(), MaterialInstanceId::next());
+    }
+
+    #[test]
+    fn a_boxed_material_forwards_to_the_material_inside() {
+        let boxed: Box<dyn Material> = Box::new(MeshBasicMaterial::new(Color::RED));
+        assert_eq!(boxed.material_id(), MaterialId::Basic);
+        assert_eq!(boxed.bind().color, Color::RED);
+    }
+
+    #[test]
+    fn a_mesh_can_carry_a_material_chosen_at_runtime() {
+        // The Ch22 payoff: the material type is erased, but the mesh still
+        // renders, because `Box<dyn Material>` is itself a `Material`.
+        let textured = false;
+        let material: Box<dyn Material> = if textured {
+            Box::new(SpriteMaterial::new(Texture::white()))
+        } else {
+            Box::new(MeshBasicMaterial::new(Color::BLUE))
+        };
+
+        let mesh = Mesh::new(BoxGeometry::cube(1.0), material);
+        let renderable = mesh.renderable().expect("a mesh always draws something");
+        assert_eq!(renderable.material.material_id(), MaterialId::Basic);
+        assert_eq!(renderable.material.bind().color, Color::BLUE);
     }
 }

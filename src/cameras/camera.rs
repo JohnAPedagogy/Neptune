@@ -16,13 +16,3 @@ pub trait Camera {
         self.proj_matrix() * self.view_matrix()
     }
 }
-
-impl<C: Camera + ?Sized> Camera for &C {
-    fn view_matrix(&self) -> Mat4 {
-        (**self).view_matrix()
-    }
-
-    fn proj_matrix(&self) -> Mat4 {
-        (**self).proj_matrix()
-    }
-}

@@ -62,7 +62,8 @@ mod tests {
 
     #[test]
     fn with_direction_normalises() {
-        let light = DirectionalLight::new(Color::WHITE, 1.0).with_direction(Vec3::new(0.0, 0.0, 5.0));
+        let light =
+            DirectionalLight::new(Color::WHITE, 1.0).with_direction(Vec3::new(0.0, 0.0, 5.0));
         assert_eq!(light.direction, Vec3::Z);
     }
 

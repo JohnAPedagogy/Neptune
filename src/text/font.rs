@@ -211,8 +211,8 @@ impl Font {
             );
         }
 
-        let texture = Texture::from_rgba8(atlas_width, atlas_height, rgba)
-            .map_err(FontError::Texture)?;
+        let texture =
+            Texture::from_rgba8(atlas_width, atlas_height, rgba).map_err(FontError::Texture)?;
 
         Ok(Arc::new(GlyphAtlas {
             texture,

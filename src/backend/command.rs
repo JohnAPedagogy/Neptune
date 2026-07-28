@@ -45,7 +45,15 @@ pub(crate) fn record_scene(
     view_proj: Mat4,
 ) {
     for object in scene.objects() {
-        record_object(builder, ctx, render_pass, caches, object, view_proj, Mat4::IDENTITY);
+        record_object(
+            builder,
+            ctx,
+            render_pass,
+            caches,
+            object,
+            view_proj,
+            Mat4::IDENTITY,
+        );
     }
 }
 
@@ -65,11 +73,26 @@ fn record_object(
     let world = parent * object.transform().matrix();
 
     if let Some(renderable) = object.renderable() {
-        record_draw(builder, ctx, render_pass, caches, &renderable, view_proj * world);
+        record_draw(
+            builder,
+            ctx,
+            render_pass,
+            caches,
+            &renderable,
+            view_proj * world,
+        );
     }
 
     for child in object.children() {
-        record_object(builder, ctx, render_pass, caches, child.as_ref(), view_proj, world);
+        record_object(
+            builder,
+            ctx,
+            render_pass,
+            caches,
+            child.as_ref(),
+            view_proj,
+            world,
+        );
     }
 }
 
@@ -84,10 +107,9 @@ fn record_draw(
     let material = renderable.material;
     let binding = material.bind();
 
-    let pipeline =
-        caches
-            .pipelines
-            .get_or_create(&ctx.device, render_pass, material.material_id());
+    let pipeline = caches
+        .pipelines
+        .get_or_create(&ctx.device, render_pass, material.material_id());
     let layout = pipeline.layout().clone();
 
     // Empty geometry is legitimate — an empty string has no glyph quads.

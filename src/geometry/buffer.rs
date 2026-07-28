@@ -35,12 +35,6 @@ impl<V: Vertex> BufferGeometry<V> {
         }
     }
 
-    /// Creates a geometry with a trivial `0..n` index list.
-    pub fn from_vertices(vertices: Vec<V>) -> Self {
-        let indices = (0..vertices.len() as u32).collect();
-        BufferGeometry::new(vertices, indices)
-    }
-
     pub fn vertices(&self) -> &[V] {
         &self.vertices
     }
@@ -100,12 +94,6 @@ mod tests {
         let a = BufferGeometry::new(vec![vertex(0.0)], vec![0]);
         let b = BufferGeometry::new(vec![vertex(0.0)], vec![0]);
         assert_ne!(a.id(), b.id());
-    }
-
-    #[test]
-    fn from_vertices_builds_sequential_indices() {
-        let g = BufferGeometry::from_vertices(vec![vertex(0.0), vertex(1.0), vertex(2.0)]);
-        assert_eq!(g.indices(), &[0, 1, 2]);
     }
 
     #[test]

@@ -15,7 +15,9 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::vertex_input::{Vertex as VulkanoVertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
-use vulkano::pipeline::{DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::{
+    DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+};
 use vulkano::render_pass::{RenderPass, Subpass};
 use vulkano::shader::EntryPoint;
 

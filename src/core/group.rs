@@ -101,7 +101,10 @@ mod tests {
     fn children_are_reachable_and_mutable() {
         let mut g = Group::new("pipes");
         g.add(cube());
-        g.get_mut(0).expect("child 0 exists").transform_mut().position = Vec3::Y;
+        g.get_mut(0)
+            .expect("child 0 exists")
+            .transform_mut()
+            .position = Vec3::Y;
         assert_eq!(g.get(0).unwrap().transform().position, Vec3::Y);
         assert_eq!(Object3D::children(&g).len(), 1);
     }

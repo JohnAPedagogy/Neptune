@@ -60,7 +60,11 @@ mod tests {
     fn plane_is_flat_on_z() {
         let g = PlaneGeometry::new(3.0, 7.0);
         assert!(Geometry::vertices(&g).iter().all(|v| v.position[2] == 0.0));
-        assert!(Geometry::vertices(&g).iter().all(|v| v.normal == [0.0, 0.0, 1.0]));
+        assert!(
+            Geometry::vertices(&g)
+                .iter()
+                .all(|v| v.normal == [0.0, 0.0, 1.0])
+        );
     }
 
     #[test]

@@ -51,12 +51,6 @@ impl OrthographicCamera {
         self.bottom = -hh;
         self.top = hh;
     }
-
-    /// Moves the camera in the XY plane without changing its depth.
-    pub fn set_center(&mut self, x: f32, y: f32) {
-        self.transform.position.x = x;
-        self.transform.position.y = y;
-    }
 }
 
 impl Camera for OrthographicCamera {
@@ -133,8 +127,10 @@ mod tests {
     #[test]
     fn panning_the_camera_shifts_what_is_visible() {
         let mut cam = camera();
-        cam.set_center(3.0, -2.0);
-        let seen = cam.view_matrix().transform_point3(Vec3::new(3.0, -2.0, 0.0));
+        cam.transform.position = Vec3::new(3.0, -2.0, 0.0);
+        let seen = cam
+            .view_matrix()
+            .transform_point3(Vec3::new(3.0, -2.0, 0.0));
         assert!(seen.length() < 1e-5, "{seen:?}");
     }
 }

@@ -104,10 +104,6 @@ impl Renderer {
             .run_app(&mut app)
             .expect("the OS event loop exited with an error");
     }
-
-    pub fn options(&self) -> RendererOptions {
-        self.options
-    }
 }
 
 /// Everything that only exists once there is a window: the device, the
@@ -132,8 +128,7 @@ impl RenderState {
         // the format has to be settled before either of them exists.
         let image_format = preferred_surface_format(&ctx, &surface);
         let render_pass = create_render_pass(&ctx.device, image_format);
-        let surface_state =
-            SurfaceState::new(&ctx, &surface, &window, &render_pass, image_format);
+        let surface_state = SurfaceState::new(&ctx, &surface, &window, &render_pass, image_format);
 
         let caches = RenderCaches::new(&ctx);
         let previous_frame_end = Some(sync::now(ctx.device.clone()).boxed());

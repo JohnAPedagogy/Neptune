@@ -58,7 +58,11 @@ mod tests {
 
     #[test]
     fn simple_vertex_casts_to_bytes() {
-        let v = [SimpleVertex::new([1.0, 2.0, 3.0], [0.0, 1.0, 0.0], [0.5, 0.5])];
+        let v = [SimpleVertex::new(
+            [1.0, 2.0, 3.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.5],
+        )];
         let bytes: &[u8] = bytemuck::cast_slice(&v);
         assert_eq!(bytes.len(), SimpleVertex::stride());
     }

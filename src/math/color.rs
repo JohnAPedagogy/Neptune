@@ -48,29 +48,10 @@ impl Color {
         Color::rgba(r, g, b, 1.0)
     }
 
-    /// Creates a colour from a packed `0xRRGGBBAA` integer.
-    pub fn hex_alpha(hex: u32) -> Self {
-        let r = ((hex >> 24) & 0xff) as f32 / 255.0;
-        let g = ((hex >> 16) & 0xff) as f32 / 255.0;
-        let b = ((hex >> 8) & 0xff) as f32 / 255.0;
-        let a = (hex & 0xff) as f32 / 255.0;
-        Color::rgba(r, g, b, a)
-    }
-
-    /// Returns a copy of this colour with the alpha channel replaced.
+    /// Returns a copy of this colour with the alpha channel replaced — the
+    /// usual way to make a sprite tint translucent.
     pub const fn with_alpha(self, a: f32) -> Self {
         Color { a, ..self }
-    }
-
-    /// Linearly interpolates towards `other`. `t` is clamped to `0.0..=1.0`.
-    pub fn lerp(self, other: Color, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
-        Color {
-            r: self.r + (other.r - self.r) * t,
-            g: self.g + (other.g - self.g) * t,
-            b: self.b + (other.b - self.b) * t,
-            a: self.a + (other.a - self.a) * t,
-        }
     }
 
     /// The component array the renderer hands to the GPU.
@@ -133,33 +114,10 @@ mod tests {
     }
 
     #[test]
-    fn hex_alpha_unpacks_four_channels() {
-        let c = Color::hex_alpha(0x8040207f);
-        assert!(approx(c.r, 0x80 as f32 / 255.0));
-        assert!(approx(c.g, 0x40 as f32 / 255.0));
-        assert!(approx(c.b, 0x20 as f32 / 255.0));
-        assert!(approx(c.a, 0x7f as f32 / 255.0));
-    }
-
-    #[test]
     fn with_alpha_keeps_rgb() {
         let c = Color::RED.with_alpha(0.5);
         assert!(approx(c.r, 1.0));
         assert!(approx(c.a, 0.5));
-    }
-
-    #[test]
-    fn lerp_endpoints_and_midpoint() {
-        assert_eq!(Color::BLACK.lerp(Color::WHITE, 0.0), Color::BLACK);
-        assert_eq!(Color::BLACK.lerp(Color::WHITE, 1.0), Color::WHITE);
-        let mid = Color::BLACK.lerp(Color::WHITE, 0.5);
-        assert!(approx(mid.r, 0.5) && approx(mid.g, 0.5) && approx(mid.b, 0.5));
-    }
-
-    #[test]
-    fn lerp_clamps_out_of_range_t() {
-        assert_eq!(Color::BLACK.lerp(Color::WHITE, -3.0), Color::BLACK);
-        assert_eq!(Color::BLACK.lerp(Color::WHITE, 9.0), Color::WHITE);
     }
 
     #[test]

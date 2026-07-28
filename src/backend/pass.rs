@@ -73,8 +73,8 @@ pub(crate) fn create_framebuffers(
     images
         .iter()
         .map(|image| {
-            let color_view =
-                ImageView::new_default(image.clone()).expect("failed to create swapchain image view");
+            let color_view = ImageView::new_default(image.clone())
+                .expect("failed to create swapchain image view");
             Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo {

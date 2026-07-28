@@ -70,7 +70,10 @@ mod tests {
         let mut cam = camera();
         cam.transform.position = Vec3::new(0.0, 0.0, 5.0);
         let seen = cam.view_matrix().transform_point3(Vec3::ZERO);
-        assert!((seen - Vec3::new(0.0, 0.0, -5.0)).length() < 1e-5, "{seen:?}");
+        assert!(
+            (seen - Vec3::new(0.0, 0.0, -5.0)).length() < 1e-5,
+            "{seen:?}"
+        );
     }
 
     #[test]
@@ -84,7 +87,11 @@ mod tests {
     fn projection_maps_the_far_plane_to_one_depth() {
         let cam = camera();
         let p = cam.proj_matrix() * glam::Vec4::new(0.0, 0.0, -cam.far, 1.0);
-        assert!((p.z / p.w - 1.0).abs() < 1e-3, "far depth was {}", p.z / p.w);
+        assert!(
+            (p.z / p.w - 1.0).abs() < 1e-3,
+            "far depth was {}",
+            p.z / p.w
+        );
     }
 
     #[test]
@@ -100,7 +107,10 @@ mod tests {
         cam.transform.position = Vec3::new(0.0, 0.0, 10.0);
         cam.look_at(Vec3::ZERO, Vec3::Y);
         let seen = cam.view_matrix().transform_point3(Vec3::ZERO);
-        assert!((seen - Vec3::new(0.0, 0.0, -10.0)).length() < 1e-4, "{seen:?}");
+        assert!(
+            (seen - Vec3::new(0.0, 0.0, -10.0)).length() < 1e-4,
+            "{seen:?}"
+        );
     }
 
     #[test]

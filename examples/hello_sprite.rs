@@ -13,7 +13,11 @@ fn checkerboard(size: u32, squares: u32, a: Color, b: Color) -> Texture {
     let mut rgba = Vec::with_capacity((size * size * 4) as usize);
     for y in 0..size {
         for x in 0..size {
-            let color = if ((x / cell) + (y / cell)) % 2 == 0 { a } else { b };
+            let color = if ((x / cell) + (y / cell)).is_multiple_of(2) {
+                a
+            } else {
+                b
+            };
             for channel in color.to_array() {
                 rgba.push((channel * 255.0) as u8);
             }
@@ -34,7 +38,8 @@ fn main() {
 
     // 10 world units tall; the width follows the window's aspect ratio.
     const VIEW_HEIGHT: f32 = 10.0;
-    let mut camera = OrthographicCamera::from_size(VIEW_HEIGHT * 16.0 / 9.0, VIEW_HEIGHT, -100.0, 100.0);
+    let mut camera =
+        OrthographicCamera::from_size(VIEW_HEIGHT * 16.0 / 9.0, VIEW_HEIGHT, -100.0, 100.0);
 
     let sprite = Mesh::new(
         PlaneGeometry::new(5.0, 5.0),

@@ -31,13 +31,6 @@ impl<G, M> Mesh<G, M> {
             visible: true,
         }
     }
-
-    /// Builder-style transform override, for the common
-    /// `Mesh::new(..).with_transform(..)` shape.
-    pub fn with_transform(mut self, transform: Transform) -> Self {
-        self.transform = transform;
-        self
-    }
 }
 
 impl<G, M> Object3D for Mesh<G, M>
@@ -102,7 +95,9 @@ mod tests {
         let expected_id: GeometryId = crate::geometry::Geometry::geometry_id(&geometry);
         let mesh = Mesh::new(geometry, MeshBasicMaterial::default());
 
-        let renderable = mesh.renderable().expect("a mesh always has something to draw");
+        let renderable = mesh
+            .renderable()
+            .expect("a mesh always has something to draw");
         assert_eq!(renderable.geometry.geometry_id(), expected_id);
         assert_eq!(renderable.material.material_id(), MaterialId::Basic);
     }

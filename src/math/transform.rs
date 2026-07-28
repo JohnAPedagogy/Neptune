@@ -51,24 +51,6 @@ impl Transform {
     pub fn matrix(&self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.quat(), self.position)
     }
-
-    /// Moves the transform by `delta` in parent space.
-    pub fn translate(&mut self, delta: Vec3) -> &mut Self {
-        self.position += delta;
-        self
-    }
-
-    /// Adds `delta` (radians) to the Euler angles.
-    pub fn rotate(&mut self, delta: Vec3) -> &mut Self {
-        self.rotation += delta;
-        self
-    }
-
-    /// Replaces the scale with a uniform value.
-    pub fn set_uniform_scale(&mut self, scale: f32) -> &mut Self {
-        self.scale = Vec3::splat(scale);
-        self
-    }
 }
 
 impl Default for Transform {
@@ -111,7 +93,10 @@ mod tests {
         let mut t = Transform::new();
         t.rotation.y = FRAC_PI_2;
         let rotated = t.matrix().transform_point3(Vec3::X);
-        assert!(approx_vec(rotated, Vec3::new(0.0, 0.0, -1.0)), "{rotated:?}");
+        assert!(
+            approx_vec(rotated, Vec3::new(0.0, 0.0, -1.0)),
+            "{rotated:?}"
+        );
     }
 
     #[test]
@@ -122,23 +107,6 @@ mod tests {
         // X axis scaled to length 2, yawed onto -Z, then lifted by 5 on Y.
         let p = t.matrix().transform_point3(Vec3::X);
         assert!(approx_vec(p, Vec3::new(0.0, 5.0, -2.0)), "{p:?}");
-    }
-
-    #[test]
-    fn translate_and_rotate_accumulate() {
-        let mut t = Transform::new();
-        t.translate(Vec3::X).translate(Vec3::X);
-        t.rotate(Vec3::Y * 0.5).rotate(Vec3::Y * 0.5);
-        assert!(approx_vec(t.position, Vec3::new(2.0, 0.0, 0.0)));
-        assert!(approx_vec(t.rotation, Vec3::new(0.0, 1.0, 0.0)));
-    }
-
-    #[test]
-    fn set_uniform_scale_replaces_all_axes() {
-        let mut t = Transform::new();
-        t.scale = Vec3::new(9.0, 9.0, 9.0);
-        t.set_uniform_scale(0.5);
-        assert!(approx_vec(t.scale, Vec3::splat(0.5)));
     }
 
     #[test]

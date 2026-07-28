@@ -128,10 +128,7 @@ mod tests {
     }
 
     fn sphere() -> BasicMesh {
-        Mesh::new(
-            SphereGeometry::new(1.0, 8, 8),
-            MeshBasicMaterial::default(),
-        )
+        Mesh::new(SphereGeometry::new(1.0, 8, 8), MeshBasicMaterial::default())
     }
 
     #[test]
@@ -195,7 +192,11 @@ mod tests {
             visited += 1;
         }
         assert_eq!(visited, 3);
-        assert!(scene.query::<BasicMesh>().all(|m| m.transform.position.y == 1.0));
+        assert!(
+            scene
+                .query::<BasicMesh>()
+                .all(|m| m.transform.position.y == 1.0)
+        );
     }
 
     #[test]

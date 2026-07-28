@@ -33,16 +33,8 @@ impl SphereGeometry {
                 let u = x as f32 / w as f32;
                 let theta = u * 2.0 * PI;
 
-                let normal = [
-                    -phi.sin() * theta.cos(),
-                    phi.cos(),
-                    phi.sin() * theta.sin(),
-                ];
-                let position = [
-                    normal[0] * radius,
-                    normal[1] * radius,
-                    normal[2] * radius,
-                ];
+                let normal = [-phi.sin() * theta.cos(), phi.cos(), phi.sin() * theta.sin()];
+                let position = [normal[0] * radius, normal[1] * radius, normal[2] * radius];
                 vertices.push(SimpleVertex::new(position, normal, [u, v]));
             }
         }
