@@ -469,6 +469,22 @@ fn load_bird_frames() -> Vec<Texture> {
 const VIEW_HEIGHT: f32 = 10.0;
 const BIRD_ANIMATION_FRAME_SECONDS: f32 = 0.12;
 
+/// Centres a text mesh horizontally on the world's vertical axis, which is
+/// also the middle of the screen for this example's camera.
+///
+/// A `TextMesh` is laid out rightward from the left edge of its first glyph, so
+/// the run covers `[x, x + width * scale]` and centring it means starting at
+/// `-width * scale / 2` (exactly the offset [`TextMesh::width`] documents).
+/// Reading the real width beats a hand-tuned constant twice over:
+/// `Font::system_default()` resolves to Consolas on Windows, DejaVu Sans on
+/// Linux and Arial on macOS — three different sets of glyph metrics — and the
+/// score label gets wider as the score gains digits.
+///
+/// Call it after setting `transform.scale`, and again after every `set_text`.
+fn center_text_x(text: &mut TextMesh) {
+    text.transform.position.x = -text.width() * text.transform.scale.x * 0.5;
+}
+
 fn main() {
     let mut renderer = Renderer::new(RendererOptions {
         width: 480,
@@ -541,13 +557,15 @@ fn main() {
         .expect("a system font is available");
 
     let mut score_text = TextMesh::with_color(atlas.clone(), "Score: 0", Color::WHITE);
-    score_text.transform.position = Vec3::new(-2.6, 4.0, 0.0);
+    score_text.transform.position = Vec3::new(0.0, 4.0, 0.0);
     score_text.transform.scale = Vec3::splat(0.9);
+    center_text_x(&mut score_text);
     let score_id = scene.add(score_text);
 
     let mut game_over_text = TextMesh::with_color(atlas, "GAME OVER - SPACE", Color::hex(0xff5555));
-    game_over_text.transform.position = Vec3::new(-2.3, 0.0, 0.0);
+    game_over_text.transform.position = Vec3::new(0.0, 0.0, 0.0);
     game_over_text.transform.scale = Vec3::splat(0.3);
+    center_text_x(&mut game_over_text);
     game_over_text.visible = false;
     let game_over_id = scene.add(game_over_text);
 
@@ -624,6 +642,8 @@ fn main() {
             last_displayed_score = game.score;
             if let Some(text) = scene.get_mut_as::<TextMesh>(score_id) {
                 text.set_text(&format!("Score: {}", game.score));
+                // The label just got wider (or narrower); re-centre it.
+                center_text_x(text);
             }
         }
 
