@@ -1,0 +1,19 @@
+# shaderc-sys (pulled in by vulkano-shaders) compiles shaderc's C++ sources
+# from scratch on first build. Two Windows/MSVC gotchas this works around
+# (see hardparts/arch/workshop01_vulkano_triangle.md §6a for the full story):
+#
+# 1. shaderc's bundled CMakeLists.txt requires an old `cmake_minimum_required`
+#    that current CMake refuses to configure without an explicit policy floor.
+# 2. Building directly under a deeply nested project path + shaderc's own
+#    deeply nested C++ source tree can trip an obscure MSVC `cl.exe` long-path
+#    failure. Building into a short target dir avoids it.
+#
+# This applies automatically whenever cargo is invoked with CWD inside this
+# repo (Cargo's config discovery is CWD-based, not --manifest-path-based) --
+# unlike persistent user-level env vars, which subagent/CI shells don't
+# reliably inherit.
+[env]
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+
+[build]
+target-dir = "D:/Programs/vkb-neptune"
