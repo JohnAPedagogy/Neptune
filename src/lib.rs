@@ -16,3 +16,4 @@ pub mod materials;
 pub mod math;
 pub mod objects;
 pub mod renderer;
+pub mod text;
