@@ -25,3 +25,12 @@ rand = "0.8"
 [[example]]
 name = "flappy_bird"
 test = true
+
+[[example]]
+name = "hello_cube"
+
+[[example]]
+name = "hello_sprite"
+
+[[example]]
+name = "orbit_cube"
