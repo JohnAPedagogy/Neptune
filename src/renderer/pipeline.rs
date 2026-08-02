@@ -11,7 +11,7 @@ use vulkano::pipeline::graphics::color_blend::{
 use vulkano::pipeline::graphics::depth_stencil::{CompareOp, DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
-use vulkano::pipeline::graphics::rasterization::RasterizationState;
+use vulkano::pipeline::graphics::rasterization::{PolygonMode, RasterizationState};
 use vulkano::pipeline::graphics::vertex_input::{Vertex as VulkanoVertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
@@ -63,7 +63,7 @@ fn build_pipeline(
         shaders::vs::load(device.clone()).expect("failed to load the shared vertex shader"),
     );
     let fs = match id {
-        MaterialId::Basic => entry_point(
+        MaterialId::Basic | MaterialId::BasicWireframe => entry_point(
             shaders::fs_basic::load(device.clone())
                 .expect("failed to load the flat-colour fragment shader"),
         ),
@@ -95,7 +95,7 @@ fn build_pipeline(
     // Opaque geometry writes depth; alpha-blended sprites test against it but
     // must not write, or a transparent quad would occlude whatever is behind it.
     let (blend, depth) = match id {
-        MaterialId::Basic => (None, DepthState::simple()),
+        MaterialId::Basic | MaterialId::BasicWireframe => (None, DepthState::simple()),
         MaterialId::Sprite => (
             Some(AttachmentBlend::alpha()),
             DepthState {
@@ -103,6 +103,15 @@ fn build_pipeline(
                 compare_op: CompareOp::LessOrEqual,
             },
         ),
+    };
+
+    // Wireframe drops filled faces and rasterises the triangle edges as lines.
+    let rasterization_state = match id {
+        MaterialId::BasicWireframe => RasterizationState {
+            polygon_mode: PolygonMode::Line,
+            ..Default::default()
+        },
+        _ => RasterizationState::default(),
     };
 
     GraphicsPipeline::new(
@@ -113,7 +122,7 @@ fn build_pipeline(
             vertex_input_state: Some(vertex_input_state),
             input_assembly_state: Some(InputAssemblyState::default()),
             viewport_state: Some(ViewportState::default()),
-            rasterization_state: Some(RasterizationState::default()),
+            rasterization_state: Some(rasterization_state),
             multisample_state: Some(MultisampleState::default()),
             color_blend_state: Some(ColorBlendState::with_attachment_states(
                 subpass.num_color_attachments(),

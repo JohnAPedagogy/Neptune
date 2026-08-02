@@ -39,10 +39,10 @@
 //! - [`objects`] — [`Mesh`](objects::Mesh), the thing you actually add.
 //! - [`geometry`] — vertex data and the built-in shape constructors.
 //! - [`materials`] — how surfaces are shaded, including textures.
-//! - [`cameras`] — perspective and orthographic viewpoints.
+//! - [`cameras`] — perspective, orthographic, and orbit viewpoints.
 //! - [`lights`] — light source types.
 //! - [`math`] — colour, transforms, 2D collision, and `glam` re-exports.
-//! - [`input`] — keyboard state.
+//! - [`input`] — keyboard and mouse state.
 //! - [`text`] — fonts, glyph atlases, and text meshes.
 //! - [`renderer`] — the window and the frame loop.
 //!

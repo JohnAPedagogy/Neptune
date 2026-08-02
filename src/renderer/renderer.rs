@@ -431,6 +431,18 @@ where
             WindowEvent::KeyboardInput { ref event, .. } => {
                 self.input.handle_key_event(event);
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.input.mouse_mut().handle_cursor_moved(position);
+            }
+            WindowEvent::CursorLeft { .. } => {
+                self.input.mouse_mut().handle_cursor_left();
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.input.mouse_mut().handle_button_event(button, state);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.input.mouse_mut().handle_scroll(delta);
+            }
             WindowEvent::Focused(false) => self.input.release_all(),
             WindowEvent::RedrawRequested => self.draw_frame(event_loop),
             _ => {}

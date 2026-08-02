@@ -1,7 +1,8 @@
-//! Frame-coherent keyboard state.
+//! Frame-coherent keyboard and mouse state.
 
 use std::collections::HashSet;
 
+use super::mouse::MouseState;
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::PhysicalKey;
 
@@ -12,17 +13,30 @@ pub use winit::keyboard::KeyCode;
 /// The renderer feeds this from the window event stream and hands it to the
 /// render-loop closure via [`Frame::input`](crate::renderer::Frame::input).
 /// Nothing else in the engine touches it, so a game can poll it whenever it
-/// likes during its frame.
+/// likes during its frame. The same holds for the [`MouseState`] it carries:
+/// cursor deltas, scroll, and button edges, all reset once per frame.
 #[derive(Debug, Default, Clone)]
 pub struct InputState {
     held: HashSet<KeyCode>,
     just_pressed: HashSet<KeyCode>,
     just_released: HashSet<KeyCode>,
+    mouse: MouseState,
 }
 
 impl InputState {
     pub fn new() -> Self {
         InputState::default()
+    }
+
+    /// The mouse half of the frame's input.
+    pub fn mouse(&self) -> &MouseState {
+        &self.mouse
+    }
+
+    /// Mutable access for the renderer's event handler, which feeds raw winit
+    /// mouse events into the [`MouseState`]. Nothing public reaches it.
+    pub(crate) fn mouse_mut(&mut self) -> &mut MouseState {
+        &mut self.mouse
     }
 
     /// Whether `key` is currently down.
@@ -78,6 +92,7 @@ impl InputState {
     pub(crate) fn end_frame(&mut self) {
         self.just_pressed.clear();
         self.just_released.clear();
+        self.mouse.end_frame();
     }
 
     /// Drops all held keys. Used when the window loses focus, so a key held at
@@ -86,6 +101,7 @@ impl InputState {
         for key in self.held.drain() {
             self.just_released.insert(key);
         }
+        self.mouse.release_all();
     }
 }
 

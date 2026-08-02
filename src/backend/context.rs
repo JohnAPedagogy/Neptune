@@ -10,7 +10,7 @@ use vulkano::command_buffer::allocator::{
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{
-    Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
+    Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags,
 };
 use vulkano::instance::{Instance, InstanceCreateInfo};
 use vulkano::memory::allocator::StandardMemoryAllocator;
@@ -68,6 +68,13 @@ impl VulkanContext {
                     ..Default::default()
                 }],
                 enabled_extensions: extensions,
+                // Wireframe rendering rasterises triangle edges as lines, which
+                // Vulkan gates behind `fillModeNonSolid`. Core since 1.0, so
+                // every device has it; enabled once here for the whole engine.
+                enabled_features: DeviceFeatures {
+                    fill_mode_non_solid: true,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )

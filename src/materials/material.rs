@@ -12,6 +12,9 @@ use crate::math::Color;
 pub enum MaterialId {
     /// Flat, unlit colour. Opaque, depth-tested and depth-written.
     Basic,
+    /// Flat, unlit colour drawn as triangle outlines instead of filled faces —
+    /// the `MeshBasicMaterial({ wireframe: true })` look.
+    BasicWireframe,
     /// Textured quad, tinted by a colour, alpha-blended and depth-read-only.
     Sprite,
 }

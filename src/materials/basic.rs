@@ -6,15 +6,28 @@ use crate::math::Color;
 /// Shades every fragment with one flat colour, ignoring all lights.
 ///
 /// Deliberately unlit, exactly like its Three.js namesake: a spinning cube
-/// drawn with it reads as a silhouette, which is the honest result.
+/// drawn with it reads as a silhouette, which is the honest result. Set
+/// [`wireframe`](MeshBasicMaterial::wireframe) to draw only the triangle edges,
+/// the `MeshBasicMaterial({ wireframe: true })` look.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MeshBasicMaterial {
     pub color: Color,
+    /// Draw triangle edges instead of filled faces.
+    pub wireframe: bool,
 }
 
 impl MeshBasicMaterial {
     pub fn new(color: Color) -> Self {
-        MeshBasicMaterial { color }
+        MeshBasicMaterial {
+            color,
+            wireframe: false,
+        }
+    }
+
+    /// Flips the material to wireframe rendering.
+    pub fn with_wireframe(mut self, wireframe: bool) -> Self {
+        self.wireframe = wireframe;
+        self
     }
 }
 
@@ -26,7 +39,11 @@ impl Default for MeshBasicMaterial {
 
 impl Material for MeshBasicMaterial {
     fn material_id(&self) -> MaterialId {
-        MaterialId::Basic
+        if self.wireframe {
+            MaterialId::BasicWireframe
+        } else {
+            MaterialId::Basic
+        }
     }
 
     fn bind(&self) -> MaterialBinding<'_> {
@@ -59,5 +76,13 @@ mod tests {
         let mut m = MeshBasicMaterial::new(Color::RED);
         m.color = Color::BLUE;
         assert_eq!(m.bind().color, Color::BLUE);
+    }
+
+    #[test]
+    fn wireframe_selects_the_wireframe_pipeline() {
+        let m = MeshBasicMaterial::new(Color::RED).with_wireframe(true);
+        assert_eq!(m.material_id(), MaterialId::BasicWireframe);
+        assert_eq!(m.bind().color, Color::RED);
+        assert_eq!(MeshBasicMaterial::new(Color::RED).material_id(), MaterialId::Basic);
     }
 }
