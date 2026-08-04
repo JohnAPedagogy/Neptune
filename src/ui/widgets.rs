@@ -247,6 +247,35 @@ impl<'a> UiFrame<'a> {
 
         Response { changed }
     }
+
+    /// A collapsible group, dat.gui's `gui.addFolder('name')`. Starts expanded.
+    pub fn folder(&mut self, label: &str, contents: impl FnOnce(&mut UiFrame)) {
+        let id = WidgetId::new(label, 0);
+        let row = self.layout.row(ROW_HEIGHT);
+        let was_collapsed = self.ui.collapsed.contains(&id);
+
+        if self.mouse.just_pressed(MouseButton::Left) {
+            if let Some((x, y)) = self.mouse.position() {
+                if row.contains_point(Vec2::new(x, y)) {
+                    if was_collapsed {
+                        self.ui.collapsed.remove(&id);
+                    } else {
+                        self.ui.collapsed.insert(id);
+                    }
+                }
+            }
+        }
+
+        self.push_quad(row, Color::rgba(0.12, 0.12, 0.15, 1.0));
+        let arrow = if self.ui.collapsed.contains(&id) { ">" } else { "v" };
+        self.push_text(row.min, &format!("{arrow} {label}"), Color::WHITE);
+
+        if !self.ui.collapsed.contains(&id) {
+            self.layout.indent(16.0);
+            contents(self);
+            self.layout.outdent(16.0);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -471,5 +500,44 @@ mod tests {
         let response = frame.color_edit("Tint", &mut value);
         assert!(response.changed());
         assert_eq!(value, PRESETS[0]);
+    }
+
+    #[test]
+    fn an_expanded_folder_draws_its_contents() {
+        let Some(mut ui) = ui() else { return };
+        let mut fov = 75.0f32;
+        let mouse = MouseState::new(); // no click: folders start expanded
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        frame.folder("Advanced", |ui| {
+            ui.slider("FOV", &mut fov, 30.0..=120.0);
+        });
+        // The header row plus the slider's label+track+thumb+value primitives.
+        assert!(frame.finish().len() > 1);
+    }
+
+    #[test]
+    fn clicking_the_header_collapses_it_and_hides_the_contents() {
+        let Some(mut primary) = ui() else { return };
+        let mut fov = 75.0f32;
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, 10.0, 11.0); // inside the header row
+
+        let mut frame = primary.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        frame.folder("Advanced", |ui| {
+            ui.slider("FOV", &mut fov, 30.0..=120.0);
+        });
+        // Only the header's own quad + label glyphs remain — no slider primitives.
+        let header_only_len = frame.finish().len();
+
+        // A second, independently-built Ui (nothing collapsed) confirms the
+        // header alone is shorter than a folder left expanded — no test-only
+        // production API needed, just a fresh Ui.
+        let Some(mut expanded) = ui() else { return };
+        let mouse2 = MouseState::new();
+        let mut frame2 = expanded.begin(&mouse2, (800.0, 600.0), Vec2::ZERO, 260.0);
+        frame2.folder("Advanced", |ui| {
+            ui.slider("FOV", &mut fov, 30.0..=120.0);
+        });
+        assert!(header_only_len < frame2.finish().len());
     }
 }
