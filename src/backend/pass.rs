@@ -86,3 +86,52 @@ pub(crate) fn create_framebuffers(
         })
         .collect()
 }
+
+/// A single subpass writing only a colour attachment, with `load_op: Load`
+/// so it draws on top of whatever the main pass already put there instead of
+/// clearing it — the second, screen-space pass the UI layer draws through.
+/// No depth attachment: UI primitives have no notion of depth, and draw
+/// order (call order) is the only occlusion rule (`neptune-imgui-plus-datgui.md`
+/// §5).
+pub(crate) fn create_ui_render_pass(device: &Arc<Device>, color_format: Format) -> Arc<RenderPass> {
+    vulkano::single_pass_renderpass!(
+        device.clone(),
+        attachments: {
+            color: {
+                format: color_format,
+                samples: 1,
+                load_op: Load,
+                store_op: Store,
+            },
+        },
+        pass: {
+            color: [color],
+            depth_stencil: {},
+        },
+    )
+    .expect("failed to create UI render pass")
+}
+
+/// One colour-only framebuffer per swapchain image, reusing the same images
+/// the main pass's framebuffers wrap — both passes draw into the same
+/// swapchain image, one after the other, within a single command buffer.
+pub(crate) fn create_ui_framebuffers(
+    render_pass: &Arc<RenderPass>,
+    images: &[Arc<Image>],
+) -> Vec<Arc<Framebuffer>> {
+    images
+        .iter()
+        .map(|image| {
+            let color_view = ImageView::new_default(image.clone())
+                .expect("failed to create UI swapchain image view");
+            Framebuffer::new(
+                render_pass.clone(),
+                FramebufferCreateInfo {
+                    attachments: vec![color_view],
+                    ..Default::default()
+                },
+            )
+            .expect("failed to create UI framebuffer")
+        })
+        .collect()
+}
