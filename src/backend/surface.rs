@@ -11,7 +11,7 @@ use vulkano::swapchain::{PresentMode, Surface, Swapchain, SwapchainCreateInfo};
 use winit::window::Window;
 
 use super::context::VulkanContext;
-use super::pass::{create_depth_view, create_framebuffers};
+use super::pass::{create_depth_view, create_framebuffers, create_ui_framebuffers};
 
 /// Everything sized by the window: the swapchain, its framebuffers, the depth
 /// attachment, and the viewport recorded into every command buffer.
@@ -28,6 +28,9 @@ pub(crate) struct SurfaceState {
     /// not a view of it.
     pub images: Vec<Arc<Image>>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
+    /// Colour-only framebuffers for the UI pass, rebuilt alongside
+    /// `framebuffers` on every resize.
+    pub ui_framebuffers: Vec<Arc<Framebuffer>>,
     pub depth_view: Arc<ImageView>,
     pub viewport: Viewport,
     pub recreate_needed: bool,
@@ -52,6 +55,7 @@ impl SurfaceState {
         surface: &Arc<Surface>,
         window: &Window,
         render_pass: &Arc<RenderPass>,
+        ui_render_pass: &Arc<RenderPass>,
         image_format: Format,
     ) -> Self {
         let capabilities = ctx
@@ -99,11 +103,13 @@ impl SurfaceState {
 
         let depth_view = create_depth_view(&ctx.memory_allocator, extent);
         let framebuffers = create_framebuffers(render_pass, &images, &depth_view);
+        let ui_framebuffers = create_ui_framebuffers(ui_render_pass, &images);
 
         SurfaceState {
             swapchain,
             images,
             framebuffers,
+            ui_framebuffers,
             depth_view,
             viewport: Viewport {
                 offset: [0.0, 0.0],
@@ -131,6 +137,7 @@ impl SurfaceState {
         &mut self,
         ctx: &VulkanContext,
         render_pass: &Arc<RenderPass>,
+        ui_render_pass: &Arc<RenderPass>,
         extent: [u32; 2],
     ) {
         let extent = [extent[0].max(1), extent[1].max(1)];
@@ -145,6 +152,7 @@ impl SurfaceState {
 
         self.depth_view = create_depth_view(&ctx.memory_allocator, extent);
         self.framebuffers = create_framebuffers(render_pass, &images, &self.depth_view);
+        self.ui_framebuffers = create_ui_framebuffers(ui_render_pass, &images);
         // `create_info()` carries the original `image_usage` over, so a
         // recreated swapchain keeps TRANSFER_SRC if the first one had it.
         self.images = images;
