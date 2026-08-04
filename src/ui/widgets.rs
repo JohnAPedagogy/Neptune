@@ -85,6 +85,35 @@ impl<'a> UiFrame<'a> {
 
         Response { changed }
     }
+
+    /// A toggled value, dat.gui's `gui.add(obj, 'prop')` over a boolean.
+    pub fn checkbox(&mut self, label: &str, value: &mut bool) -> Response {
+        let row = self.layout.row(ROW_HEIGHT);
+        let box_rect = Aabb2d::new(
+            Vec2::new(row.min.x, row.min.y + 3.0),
+            Vec2::new(row.min.x + 16.0, row.min.y + 19.0),
+        );
+
+        let mut changed = false;
+        if self.mouse.just_pressed(MouseButton::Left) {
+            if let Some((x, y)) = self.mouse.position() {
+                if box_rect.contains_point(Vec2::new(x, y)) {
+                    *value = !*value;
+                    changed = true;
+                }
+            }
+        }
+
+        let fill = if *value {
+            Color::rgba(0.4, 0.8, 0.5, 1.0)
+        } else {
+            Color::rgba(0.2, 0.2, 0.24, 1.0)
+        };
+        self.push_quad(box_rect, fill);
+        self.push_text(Vec2::new(row.min.x + 24.0, row.min.y), label, Color::WHITE);
+
+        Response { changed }
+    }
 }
 
 #[cfg(test)]
@@ -176,5 +205,51 @@ mod tests {
         let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
         frame.slider("Speed", &mut value, 0.0..=10.0);
         assert_eq!(value, stalled);
+    }
+
+    #[test]
+    fn clicking_inside_the_box_toggles_the_value() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = false;
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, 8.0, 11.0); // inside the 16px box at the row's left edge
+
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        let response = frame.checkbox("Wireframe", &mut value);
+        assert!(response.changed());
+        assert!(value);
+    }
+
+    #[test]
+    fn clicking_outside_the_box_does_nothing() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = false;
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, 500.0, 500.0);
+
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        let response = frame.checkbox("Wireframe", &mut value);
+        assert!(!response.changed());
+        assert!(!value);
+    }
+
+    #[test]
+    fn a_second_click_toggles_it_back() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = false;
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, 8.0, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.checkbox("Wireframe", &mut value);
+        }
+        assert!(value);
+
+        mouse.end_frame();
+        mouse.handle_button_event(MouseButton::Left, ElementState::Released);
+        press_at(&mut mouse, 8.0, 11.0);
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        frame.checkbox("Wireframe", &mut value);
+        assert!(!value);
     }
 }
