@@ -16,6 +16,15 @@ const LABEL_WIDTH: f32 = 90.0;
 /// Right column reserved for a slider's live value readout.
 const VALUE_WIDTH: f32 = 56.0;
 
+const PRESETS: [Color; 6] = [
+    Color::RED,
+    Color::GREEN,
+    Color::BLUE,
+    Color::YELLOW,
+    Color::WHITE,
+    Color::BLACK,
+];
+
 /// What a widget call reports about this frame — the dat.gui `.onChange`
 /// translated to a return value instead of a registered callback (see
 /// `neptune-imgui-plus-datgui.md` §2).
@@ -178,6 +187,62 @@ impl<'a> UiFrame<'a> {
             // for pixel — only the hit-test and draw rects above have to agree,
             // and both are built from `option_row` exclusively.
             self.layout.row(options.len() as f32 * ROW_HEIGHT);
+        }
+
+        Response { changed }
+    }
+
+    /// A colour swatch that opens a small preset grid, dat.gui's
+    /// `gui.addColor(obj, 'prop')`. No HSV wheel — see
+    /// `neptune-imgui-plus-datgui.md` §5's note on skipping it for v1.
+    pub fn color_edit(&mut self, label: &str, value: &mut Color) -> Response {
+        let id = WidgetId::new(label, 0);
+        let row = self.layout.row(ROW_HEIGHT);
+        self.push_text(row.min, label, Color::WHITE);
+
+        let swatch = Aabb2d::new(
+            Vec2::new(row.min.x + LABEL_WIDTH, row.min.y + 3.0),
+            Vec2::new(row.min.x + LABEL_WIDTH + 24.0, row.min.y + 19.0),
+        );
+        self.push_quad(swatch, *value);
+
+        let mut changed = false;
+        let was_open = self.ui.open.contains(&id);
+        const CELL: f32 = 20.0;
+
+        if self.mouse.just_pressed(MouseButton::Left) {
+            if let Some((x, y)) = self.mouse.position() {
+                let point = Vec2::new(x, y);
+                if swatch.contains_point(point) {
+                    if was_open {
+                        self.ui.open.remove(&id);
+                    } else {
+                        self.ui.open.insert(id);
+                    }
+                } else if was_open {
+                    for (i, preset) in PRESETS.iter().enumerate() {
+                        let cell = Aabb2d::new(
+                            Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL, swatch.min.y),
+                            Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL + 16.0, swatch.max.y),
+                        );
+                        if cell.contains_point(point) {
+                            *value = *preset;
+                            changed = true;
+                            self.ui.open.remove(&id);
+                        }
+                    }
+                }
+            }
+        }
+
+        if self.ui.open.contains(&id) {
+            for (i, preset) in PRESETS.iter().enumerate() {
+                let cell = Aabb2d::new(
+                    Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL, swatch.min.y),
+                    Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL + 16.0, swatch.max.y),
+                );
+                self.push_quad(cell, *preset);
+            }
         }
 
         Response { changed }
@@ -370,5 +435,41 @@ mod tests {
         let response = frame.dropdown("Shading", &["Flat", "Smooth"], &mut selected);
         assert!(!response.changed());
         assert_eq!(selected, 0);
+    }
+
+    #[test]
+    fn clicking_the_swatch_opens_the_preset_grid() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = Color::WHITE;
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, (LABEL_WIDTH + 10.0) as f64, 11.0); // inside the swatch
+
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        let response = frame.color_edit("Tint", &mut value);
+        assert!(!response.changed());
+        assert_eq!(value, Color::WHITE);
+    }
+
+    #[test]
+    fn clicking_an_open_preset_applies_it() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = Color::WHITE;
+
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, (LABEL_WIDTH + 10.0) as f64, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.color_edit("Tint", &mut value);
+        }
+        mouse.end_frame();
+        mouse.handle_button_event(MouseButton::Left, ElementState::Released);
+
+        // First preset cell sits just right of the swatch, same row.
+        let swatch_right = LABEL_WIDTH + 24.0;
+        press_at(&mut mouse, (swatch_right + 4.0 + 8.0) as f64, 11.0);
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        let response = frame.color_edit("Tint", &mut value);
+        assert!(response.changed());
+        assert_eq!(value, PRESETS[0]);
     }
 }
