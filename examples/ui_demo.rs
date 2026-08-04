@@ -17,7 +17,7 @@ fn main() {
     let mut renderer = Renderer::new(RendererOptions {
         width: 1280,
         height: 720,
-        title: "Neptune — ui_demo",
+        title: "Neptune - ui_demo",
     });
 
     let mut scene = Scene::new();
