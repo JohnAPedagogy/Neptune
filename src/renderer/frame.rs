@@ -7,6 +7,7 @@ use super::renderer::RenderState;
 use crate::cameras::Camera;
 use crate::core::Scene;
 use crate::input::InputState;
+use crate::ui::UiDrawList;
 
 /// Everything a single frame lets you do.
 ///
@@ -69,6 +70,30 @@ impl<'a> Frame<'a> {
     /// ```
     pub fn save_screenshot(&mut self, path: impl Into<PathBuf>) {
         self.state.request_screenshot(path.into());
+    }
+
+    /// Queues `draw_list` to be drawn as a second, screen-space pass on top of
+    /// the frame [`Frame::render`] is about to draw.
+    ///
+    /// Call this **before** [`Frame::render`], not after: like
+    /// [`Frame::save_screenshot`], the UI pass is recorded into the *same*
+    /// command buffer `render` builds in one shot (acquire, record, submit,
+    /// present), so it has to be queued before that call runs. A request made
+    /// after `render` carries over to the next frame that renders, the same as
+    /// a late screenshot request does.
+    ///
+    /// ```no_run
+    /// # use neptune::prelude::*;
+    /// # fn demo(frame: &mut Frame, scene: &Scene, camera: &dyn Camera, mut ui: Ui) {
+    /// let (w, h) = frame.size();
+    /// let mut frame_ui = ui.begin(frame.input().mouse(), (w as f32, h as f32), Vec2::ZERO, 260.0);
+    /// frame_ui.label("hello", Color::WHITE);
+    /// frame.render_ui(frame_ui.finish());
+    /// frame.render(scene, camera);
+    /// # }
+    /// ```
+    pub fn render_ui(&mut self, draw_list: UiDrawList) {
+        self.state.request_ui(draw_list);
     }
 
     /// Seconds since the previous frame — multiply your per-second velocities

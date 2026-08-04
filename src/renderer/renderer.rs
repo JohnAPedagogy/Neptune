@@ -22,14 +22,15 @@ use winit::window::{Window, WindowId};
 
 use super::clock::FrameClock;
 use super::frame::Frame;
-use crate::backend::command::{RenderCaches, record_scene};
+use crate::backend::command::{RenderCaches, record_scene, record_ui};
 use crate::backend::context::{VulkanContext, create_instance};
-use crate::backend::pass::create_render_pass;
+use crate::backend::pass::{create_render_pass, create_ui_render_pass};
 use crate::backend::screenshot::{self, ScreenshotError};
 use crate::backend::surface::{SurfaceState, preferred_surface_format};
-use crate::cameras::Camera;
+use crate::cameras::{Camera, OrthographicCamera};
 use crate::core::Scene;
 use crate::input::InputState;
+use crate::ui::UiDrawList;
 
 /// How the window is created.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,12 +115,17 @@ pub(super) struct RenderState {
     window: Arc<Window>,
     ctx: VulkanContext,
     render_pass: Arc<RenderPass>,
+    ui_render_pass: Arc<RenderPass>,
     surface_state: SurfaceState,
     caches: RenderCaches,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
     /// Where the next rendered frame should also be written as a PNG, set by
     /// [`Frame::save_screenshot`] and taken by the next [`RenderState::render`].
     pending_screenshot: Option<PathBuf>,
+    /// The next UI draw list to record, set by [`Frame::render_ui`] and
+    /// taken by the next [`RenderState::render`] — same fold-into-the-same-
+    /// command-buffer pattern as `pending_screenshot`.
+    pending_ui: Option<UiDrawList>,
 }
 
 impl RenderState {
@@ -133,7 +139,15 @@ impl RenderState {
         // the format has to be settled before either of them exists.
         let image_format = preferred_surface_format(&ctx, &surface);
         let render_pass = create_render_pass(&ctx.device, image_format);
-        let surface_state = SurfaceState::new(&ctx, &surface, &window, &render_pass, image_format);
+        let ui_render_pass = create_ui_render_pass(&ctx.device, image_format);
+        let surface_state = SurfaceState::new(
+            &ctx,
+            &surface,
+            &window,
+            &render_pass,
+            &ui_render_pass,
+            image_format,
+        );
 
         let caches = RenderCaches::new(&ctx);
         let previous_frame_end = Some(sync::now(ctx.device.clone()).boxed());
@@ -142,16 +156,23 @@ impl RenderState {
             window,
             ctx,
             render_pass,
+            ui_render_pass,
             surface_state,
             caches,
             previous_frame_end,
             pending_screenshot: None,
+            pending_ui: None,
         }
     }
 
     /// Marks the next rendered frame for capture into `path`.
     pub(super) fn request_screenshot(&mut self, path: PathBuf) {
         self.pending_screenshot = Some(path);
+    }
+
+    /// Queues `draw_list` to be drawn as the next frame's screen-space UI pass.
+    pub(super) fn request_ui(&mut self, draw_list: UiDrawList) {
+        self.pending_ui = Some(draw_list);
     }
 
     /// Reclaims finished frames and rebuilds the swapchain if it went stale.
@@ -165,6 +186,7 @@ impl RenderState {
             self.surface_state.recreate(
                 &self.ctx,
                 &self.render_pass,
+                &self.ui_render_pass,
                 [window_size.width, window_size.height],
             );
         }
@@ -228,6 +250,58 @@ impl RenderState {
         builder
             .end_render_pass(SubpassEndInfo::default())
             .expect("failed to end the render pass");
+
+        // The UI pass rides in the same command buffer, right after the 3D scene:
+        // a second begin/end_render_pass pair over the same swapchain image.
+        // Vulkan guarantees ordering between sequentially recorded commands in one
+        // primary command buffer, so no manual barrier is needed between the two
+        // passes (see `neptune-imgui-plus-datgui.md` §3).
+        if let Some(draw_list) = self.pending_ui.take() {
+            if !draw_list.is_empty() {
+                builder
+                    .begin_render_pass(
+                        RenderPassBeginInfo {
+                            // The UI attachment's load_op is `Load`, not `Clear`, so
+                            // its clear_values entry must be `None` — see vulkano's
+                            // `RenderPassBeginInfo` validation.
+                            clear_values: vec![None],
+                            ..RenderPassBeginInfo::framebuffer(
+                                self.surface_state.ui_framebuffers[image_index as usize].clone(),
+                            )
+                        },
+                        SubpassBeginInfo {
+                            contents: SubpassContents::Inline,
+                            ..Default::default()
+                        },
+                    )
+                    .expect("failed to begin the UI render pass")
+                    .set_viewport(
+                        0,
+                        [self.surface_state.viewport.clone()].into_iter().collect(),
+                    )
+                    .expect("failed to set the UI viewport");
+
+                let (width, height) = self.size();
+                // top=0, bottom=height: pixel Y-down (matching MouseState::position)
+                // maps directly onto this camera with no coordinate flip — see
+                // `neptune-imgui-plus-datgui.md` §3.
+                let ui_camera =
+                    OrthographicCamera::new(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
+
+                record_ui(
+                    &mut builder,
+                    &self.ctx,
+                    &self.ui_render_pass,
+                    &mut self.caches,
+                    &draw_list,
+                    ui_camera.view_proj_matrix(),
+                );
+
+                builder
+                    .end_render_pass(SubpassEndInfo::default())
+                    .expect("failed to end the UI render pass");
+            }
+        }
 
         // A requested screenshot rides along in this same command buffer: the
         // copy is recorded after the render pass has stored its colour
