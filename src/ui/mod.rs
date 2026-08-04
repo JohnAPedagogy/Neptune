@@ -1,0 +1,7 @@
+//! An immediate-mode, dat.gui-flavoured widget layer, drawn as a second,
+//! screen-space render pass. See `neptune-imgui-plus-datgui.md` for the
+//! design rationale.
+
+pub(crate) mod draw_list;
+
+pub use draw_list::UiDrawList;
