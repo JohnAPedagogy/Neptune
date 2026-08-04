@@ -87,7 +87,7 @@ impl<'a> Frame<'a> {
     /// # fn demo(frame: &mut Frame, scene: &Scene, camera: &dyn Camera, mut ui: Ui) {
     /// let (w, h) = frame.size();
     /// let mut frame_ui = ui.begin(frame.input().mouse(), (w as f32, h as f32), Vec2::ZERO, 260.0);
-    /// frame_ui.label("hello", Color::WHITE);
+    /// frame_ui.label("hello", TextStyle::Body, Color::WHITE);
     /// frame.render_ui(frame_ui.finish());
     /// frame.render(scene, camera);
     /// # }
@@ -121,6 +121,15 @@ impl<'a> Frame<'a> {
     /// tracks window resizes.
     pub fn aspect_ratio(&self) -> f32 {
         self.state.aspect_ratio()
+    }
+
+    /// The OS's display scale factor for this window — 1.0 on a standard
+    /// display, 1.25/1.5/2.0 on Hi-DPI/Retina or scaled displays. Feed it to
+    /// [`Ui::set_pixels_per_point`](crate::ui::Ui::set_pixels_per_point) so
+    /// UI text and layout render at a consistent physical size across
+    /// displays.
+    pub fn scale_factor(&self) -> f32 {
+        self.state.scale_factor()
     }
 
     /// Asks the render loop to stop after this frame.

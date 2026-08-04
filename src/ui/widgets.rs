@@ -6,7 +6,7 @@ use std::ops::RangeInclusive;
 use crate::input::MouseButton;
 use crate::math::{Aabb2d, Color, Vec2};
 
-use super::context::UiFrame;
+use super::context::{TextStyle, UiFrame};
 use super::layout::WidgetId;
 
 /// Standard row height for every widget in this file.
@@ -42,14 +42,15 @@ impl Response {
 impl<'a> UiFrame<'a> {
     /// A draggable value in `range`, dat.gui's `gui.add(obj, 'prop', min, max)`.
     pub fn slider(&mut self, label: &str, value: &mut f32, range: RangeInclusive<f32>) -> Response {
+        let ppp = self.pixels_per_point();
         let id = WidgetId::new(label, 0);
-        let row = self.layout.row(ROW_HEIGHT);
+        let row = self.layout.row(ROW_HEIGHT * ppp);
         let track = Aabb2d::new(
-            Vec2::new(row.min.x + LABEL_WIDTH, row.min.y + 6.0),
-            Vec2::new(row.max.x - VALUE_WIDTH, row.max.y - 6.0),
+            Vec2::new(row.min.x + LABEL_WIDTH * ppp, row.min.y + 6.0 * ppp),
+            Vec2::new(row.max.x - VALUE_WIDTH * ppp, row.max.y - 6.0 * ppp),
         );
 
-        self.push_text(row.min, label, Color::WHITE);
+        self.push_text(row.min, label, TextStyle::Body, Color::WHITE);
         self.push_quad(track, Color::rgba(0.2, 0.2, 0.24, 1.0));
 
         let (min, max) = (*range.start(), *range.end());
@@ -79,7 +80,7 @@ impl<'a> UiFrame<'a> {
         }
 
         let t = ((*value - min) / (max - min).max(f32::EPSILON)).clamp(0.0, 1.0);
-        let thumb_w = 8.0;
+        let thumb_w = 8.0 * ppp;
         let thumb_x = track.min.x + t * (track.size().x - thumb_w).max(0.0);
         let thumb = Aabb2d::new(
             Vec2::new(thumb_x, track.min.y),
@@ -87,8 +88,9 @@ impl<'a> UiFrame<'a> {
         );
         self.push_quad(thumb, Color::rgba(0.6, 0.7, 1.0, 1.0));
         self.push_text(
-            Vec2::new(row.max.x - VALUE_WIDTH + 4.0, row.min.y),
+            Vec2::new(row.max.x - VALUE_WIDTH * ppp + 4.0 * ppp, row.min.y),
             &format!("{value:.2}"),
+            TextStyle::Body,
             Color::WHITE,
         );
 
@@ -97,10 +99,11 @@ impl<'a> UiFrame<'a> {
 
     /// A toggled value, dat.gui's `gui.add(obj, 'prop')` over a boolean.
     pub fn checkbox(&mut self, label: &str, value: &mut bool) -> Response {
-        let row = self.layout.row(ROW_HEIGHT);
+        let ppp = self.pixels_per_point();
+        let row = self.layout.row(ROW_HEIGHT * ppp);
         let box_rect = Aabb2d::new(
-            Vec2::new(row.min.x, row.min.y + 3.0),
-            Vec2::new(row.min.x + 16.0, row.min.y + 19.0),
+            Vec2::new(row.min.x, row.min.y + 3.0 * ppp),
+            Vec2::new(row.min.x + 16.0 * ppp, row.min.y + 19.0 * ppp),
         );
 
         let mut changed = false;
@@ -119,7 +122,12 @@ impl<'a> UiFrame<'a> {
             Color::rgba(0.2, 0.2, 0.24, 1.0)
         };
         self.push_quad(box_rect, fill);
-        self.push_text(Vec2::new(row.min.x + 24.0, row.min.y), label, Color::WHITE);
+        self.push_text(
+            Vec2::new(row.min.x + 24.0 * ppp, row.min.y),
+            label,
+            TextStyle::Body,
+            Color::WHITE,
+        );
 
         Response { changed }
     }
@@ -131,22 +139,29 @@ impl<'a> UiFrame<'a> {
     /// row is — the layout cursor is only ever bumped afterward, purely to
     /// reserve vertical space for whatever widget comes next.
     pub fn dropdown(&mut self, label: &str, options: &[&str], selected: &mut usize) -> Response {
+        let ppp = self.pixels_per_point();
         let id = WidgetId::new(label, 0);
-        let row = self.layout.row(ROW_HEIGHT);
+        let row_height = ROW_HEIGHT * ppp;
+        let row = self.layout.row(row_height);
         let header = Aabb2d::new(
-            Vec2::new(row.min.x + LABEL_WIDTH, row.min.y),
+            Vec2::new(row.min.x + LABEL_WIDTH * ppp, row.min.y),
             Vec2::new(row.max.x, row.max.y),
         );
 
-        self.push_text(row.min, label, Color::WHITE);
+        self.push_text(row.min, label, TextStyle::Body, Color::WHITE);
         self.push_quad(header, Color::rgba(0.2, 0.2, 0.24, 1.0));
         let current = options.get(*selected).copied().unwrap_or("");
-        self.push_text(Vec2::new(header.min.x + 6.0, row.min.y), current, Color::WHITE);
+        self.push_text(
+            Vec2::new(header.min.x + 6.0 * ppp, row.min.y),
+            current,
+            TextStyle::Body,
+            Color::WHITE,
+        );
 
         let option_row = |i: usize| {
             Aabb2d::new(
-                Vec2::new(header.min.x, header.max.y + i as f32 * ROW_HEIGHT),
-                Vec2::new(header.max.x, header.max.y + (i as f32 + 1.0) * ROW_HEIGHT),
+                Vec2::new(header.min.x, header.max.y + i as f32 * row_height),
+                Vec2::new(header.max.x, header.max.y + (i as f32 + 1.0) * row_height),
             )
         };
 
@@ -180,13 +195,18 @@ impl<'a> UiFrame<'a> {
             for (i, option) in options.iter().enumerate() {
                 let rect = option_row(i);
                 self.push_quad(rect, Color::rgba(0.15, 0.15, 0.18, 1.0));
-                self.push_text(Vec2::new(rect.min.x + 6.0, rect.min.y), option, Color::WHITE);
+                self.push_text(
+                    Vec2::new(rect.min.x + 6.0 * ppp, rect.min.y),
+                    option,
+                    TextStyle::Body,
+                    Color::WHITE,
+                );
             }
             // Reserve space so the next widget doesn't sit under the open menu.
             // The exact gap doesn't need to match `option_row`'s spacing pixel
             // for pixel — only the hit-test and draw rects above have to agree,
             // and both are built from `option_row` exclusively.
-            self.layout.row(options.len() as f32 * ROW_HEIGHT);
+            self.layout.row(options.len() as f32 * row_height);
         }
 
         Response { changed }
@@ -196,19 +216,20 @@ impl<'a> UiFrame<'a> {
     /// `gui.addColor(obj, 'prop')`. No HSV wheel — see
     /// `neptune-imgui-plus-datgui.md` §5's note on skipping it for v1.
     pub fn color_edit(&mut self, label: &str, value: &mut Color) -> Response {
+        let ppp = self.pixels_per_point();
         let id = WidgetId::new(label, 0);
-        let row = self.layout.row(ROW_HEIGHT);
-        self.push_text(row.min, label, Color::WHITE);
+        let row = self.layout.row(ROW_HEIGHT * ppp);
+        self.push_text(row.min, label, TextStyle::Body, Color::WHITE);
 
         let swatch = Aabb2d::new(
-            Vec2::new(row.min.x + LABEL_WIDTH, row.min.y + 3.0),
-            Vec2::new(row.min.x + LABEL_WIDTH + 24.0, row.min.y + 19.0),
+            Vec2::new(row.min.x + LABEL_WIDTH * ppp, row.min.y + 3.0 * ppp),
+            Vec2::new(row.min.x + LABEL_WIDTH * ppp + 24.0 * ppp, row.min.y + 19.0 * ppp),
         );
         self.push_quad(swatch, *value);
 
         let mut changed = false;
         let was_open = self.ui.open.contains(&id);
-        const CELL: f32 = 20.0;
+        let cell = 20.0 * ppp;
 
         if self.mouse.just_pressed(MouseButton::Left) {
             if let Some((x, y)) = self.mouse.position() {
@@ -221,11 +242,14 @@ impl<'a> UiFrame<'a> {
                     }
                 } else if was_open {
                     for (i, preset) in PRESETS.iter().enumerate() {
-                        let cell = Aabb2d::new(
-                            Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL, swatch.min.y),
-                            Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL + 16.0, swatch.max.y),
+                        let cell_rect = Aabb2d::new(
+                            Vec2::new(swatch.max.x + 4.0 * ppp + i as f32 * cell, swatch.min.y),
+                            Vec2::new(
+                                swatch.max.x + 4.0 * ppp + i as f32 * cell + 16.0 * ppp,
+                                swatch.max.y,
+                            ),
                         );
-                        if cell.contains_point(point) {
+                        if cell_rect.contains_point(point) {
                             *value = *preset;
                             changed = true;
                             self.ui.open.remove(&id);
@@ -237,11 +261,14 @@ impl<'a> UiFrame<'a> {
 
         if self.ui.open.contains(&id) {
             for (i, preset) in PRESETS.iter().enumerate() {
-                let cell = Aabb2d::new(
-                    Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL, swatch.min.y),
-                    Vec2::new(swatch.max.x + 4.0 + i as f32 * CELL + 16.0, swatch.max.y),
+                let cell_rect = Aabb2d::new(
+                    Vec2::new(swatch.max.x + 4.0 * ppp + i as f32 * cell, swatch.min.y),
+                    Vec2::new(
+                        swatch.max.x + 4.0 * ppp + i as f32 * cell + 16.0 * ppp,
+                        swatch.max.y,
+                    ),
                 );
-                self.push_quad(cell, *preset);
+                self.push_quad(cell_rect, *preset);
             }
         }
 
@@ -250,8 +277,9 @@ impl<'a> UiFrame<'a> {
 
     /// A collapsible group, dat.gui's `gui.addFolder('name')`. Starts expanded.
     pub fn folder(&mut self, label: &str, contents: impl FnOnce(&mut UiFrame)) {
+        let ppp = self.pixels_per_point();
         let id = WidgetId::new(label, 0);
-        let row = self.layout.row(ROW_HEIGHT);
+        let row = self.layout.row(ROW_HEIGHT * ppp);
         let was_collapsed = self.ui.collapsed.contains(&id);
 
         if self.mouse.just_pressed(MouseButton::Left) {
@@ -268,12 +296,18 @@ impl<'a> UiFrame<'a> {
 
         self.push_quad(row, Color::rgba(0.12, 0.12, 0.15, 1.0));
         let arrow = if self.ui.collapsed.contains(&id) { ">" } else { "v" };
-        self.push_text(row.min, &format!("{arrow} {label}"), Color::WHITE);
+        self.push_text(
+            row.min,
+            &format!("{arrow} {label}"),
+            TextStyle::Body,
+            Color::WHITE,
+        );
 
         if !self.ui.collapsed.contains(&id) {
-            self.layout.indent(16.0);
+            let indent = 16.0 * ppp;
+            self.layout.indent(indent);
             contents(self);
-            self.layout.outdent(16.0);
+            self.layout.outdent(indent);
         }
     }
 }

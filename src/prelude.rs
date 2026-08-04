@@ -19,4 +19,4 @@ pub use crate::math::{Aabb2d, Color, Mat4, Quat, Transform, Vec2, Vec3, Vec4};
 pub use crate::objects::Mesh;
 pub use crate::renderer::{Frame, Renderer, RendererOptions};
 pub use crate::text::{Font, GlyphAtlas, TextMesh};
-pub use crate::ui::{Response, Ui, UiFrame};
+pub use crate::ui::{Response, TextStyle, Ui, UiFrame};

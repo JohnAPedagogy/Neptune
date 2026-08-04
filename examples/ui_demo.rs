@@ -62,9 +62,23 @@ fn main() {
 
         // Build this frame's panel before rendering — see Frame::render_ui's
         // doc comment for why the ordering matters.
+        //
+        // `frame.scale_factor()` is the OS's real display scale; the extra
+        // `* 1.4` is a deliberate demo-only bump so the panel reads clearly
+        // in a screenshot. The panel width scales by the same factor so the
+        // wider Heading title and DPI-scaled columns still fit.
+        let ppp = frame.scale_factor() * 1.4;
+        ui.set_pixels_per_point(ppp);
+
         let mouse = frame.input().mouse().clone();
         let (width, height) = frame.size();
-        let mut ui_frame = ui.begin(&mouse, (width as f32, height as f32), Vec2::new(16.0, 16.0), 280.0);
+        let mut ui_frame = ui.begin(
+            &mouse,
+            (width as f32, height as f32),
+            Vec2::new(16.0, 16.0),
+            280.0 * ppp,
+        );
+        ui_frame.label("Controls", TextStyle::Heading, Color::WHITE);
         ui_frame.slider("Speed", &mut speed, 0.0..=5.0);
         ui_frame.checkbox("Wireframe", &mut wireframe);
         ui_frame.dropdown("Shading", &shading_options, &mut shading_idx);

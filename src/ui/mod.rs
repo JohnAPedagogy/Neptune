@@ -19,6 +19,6 @@ pub(crate) mod layout;
 pub(crate) mod text;
 pub(crate) mod widgets;
 
-pub use context::{Ui, UiFrame};
+pub use context::{TextStyle, Ui, UiFrame};
 pub use draw_list::UiDrawList;
 pub use widgets::Response;

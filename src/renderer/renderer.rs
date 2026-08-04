@@ -418,6 +418,11 @@ impl RenderState {
         let [w, h] = self.surface_state.extent();
         (w, h)
     }
+
+    /// The OS's display scale factor for this window.
+    pub(super) fn scale_factor(&self) -> f32 {
+        self.window.scale_factor() as f32
+    }
 }
 
 /// The winit side of the loop. Generic over the user's closure so it is called
