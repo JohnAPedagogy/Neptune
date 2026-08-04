@@ -4,5 +4,6 @@
 
 pub(crate) mod draw_list;
 pub(crate) mod layout;
+pub(crate) mod text;
 
 pub use draw_list::UiDrawList;
