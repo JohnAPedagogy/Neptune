@@ -114,6 +114,74 @@ impl<'a> UiFrame<'a> {
 
         Response { changed }
     }
+
+    /// A fixed-list selector, dat.gui's `gui.add(obj, 'prop', ['a', 'b', 'c'])`.
+    ///
+    /// Option rows are always computed from `header` (never from `self.layout`)
+    /// so the hit-test block and the draw block can never disagree about where a
+    /// row is — the layout cursor is only ever bumped afterward, purely to
+    /// reserve vertical space for whatever widget comes next.
+    pub fn dropdown(&mut self, label: &str, options: &[&str], selected: &mut usize) -> Response {
+        let id = WidgetId::new(label, 0);
+        let row = self.layout.row(ROW_HEIGHT);
+        let header = Aabb2d::new(
+            Vec2::new(row.min.x + LABEL_WIDTH, row.min.y),
+            Vec2::new(row.max.x, row.max.y),
+        );
+
+        self.push_text(row.min, label, Color::WHITE);
+        self.push_quad(header, Color::rgba(0.2, 0.2, 0.24, 1.0));
+        let current = options.get(*selected).copied().unwrap_or("");
+        self.push_text(Vec2::new(header.min.x + 6.0, row.min.y), current, Color::WHITE);
+
+        let option_row = |i: usize| {
+            Aabb2d::new(
+                Vec2::new(header.min.x, header.max.y + i as f32 * ROW_HEIGHT),
+                Vec2::new(header.max.x, header.max.y + (i as f32 + 1.0) * ROW_HEIGHT),
+            )
+        };
+
+        let mut changed = false;
+        let was_open = self.ui.open.contains(&id);
+
+        if self.mouse.just_pressed(MouseButton::Left) {
+            if let Some((x, y)) = self.mouse.position() {
+                let point = Vec2::new(x, y);
+                if header.contains_point(point) {
+                    if was_open {
+                        self.ui.open.remove(&id);
+                    } else {
+                        self.ui.open.insert(id);
+                    }
+                } else if was_open {
+                    for (i, _) in options.iter().enumerate() {
+                        if option_row(i).contains_point(point) {
+                            if *selected != i {
+                                *selected = i;
+                                changed = true;
+                            }
+                            self.ui.open.remove(&id);
+                        }
+                    }
+                }
+            }
+        }
+
+        if self.ui.open.contains(&id) {
+            for (i, option) in options.iter().enumerate() {
+                let rect = option_row(i);
+                self.push_quad(rect, Color::rgba(0.15, 0.15, 0.18, 1.0));
+                self.push_text(Vec2::new(rect.min.x + 6.0, rect.min.y), option, Color::WHITE);
+            }
+            // Reserve space so the next widget doesn't sit under the open menu.
+            // The exact gap doesn't need to match `option_row`'s spacing pixel
+            // for pixel — only the hit-test and draw rects above have to agree,
+            // and both are built from `option_row` exclusively.
+            self.layout.row(options.len() as f32 * ROW_HEIGHT);
+        }
+
+        Response { changed }
+    }
 }
 
 #[cfg(test)]
@@ -251,5 +319,56 @@ mod tests {
         let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
         frame.checkbox("Wireframe", &mut value);
         assert!(!value);
+    }
+
+    #[test]
+    fn clicking_the_header_opens_it_without_changing_the_selection() {
+        let Some(mut ui) = ui() else { return };
+        let mut selected = 0usize;
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, 150.0, 11.0); // inside the header, right of the label column
+
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        let response = frame.dropdown("Shading", &["Flat", "Smooth"], &mut selected);
+        assert!(!response.changed());
+        assert_eq!(selected, 0);
+        // Opening draws the two extra option rows.
+        assert!(frame.finish().len() > 0);
+    }
+
+    #[test]
+    fn clicking_an_open_option_selects_it_and_closes_the_menu() {
+        let Some(mut ui) = ui() else { return };
+        let mut selected = 0usize;
+
+        // Frame 1: open it.
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, 150.0, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.dropdown("Shading", &["Flat", "Smooth"], &mut selected);
+        }
+        mouse.end_frame();
+        mouse.handle_button_event(MouseButton::Left, ElementState::Released);
+
+        // Frame 2: click the second option row, just below the header.
+        press_at(&mut mouse, 150.0, (2.0 * ROW_HEIGHT + 11.0) as f64);
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        let response = frame.dropdown("Shading", &["Flat", "Smooth"], &mut selected);
+        assert!(response.changed());
+        assert_eq!(selected, 1);
+    }
+
+    #[test]
+    fn a_closed_dropdown_ignores_clicks_below_the_header() {
+        let Some(mut ui) = ui() else { return };
+        let mut selected = 0usize;
+        let mut mouse = MouseState::new();
+        press_at(&mut mouse, 150.0, (ROW_HEIGHT + 11.0) as f64); // where an option row would be, but nothing is open
+
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        let response = frame.dropdown("Shading", &["Flat", "Smooth"], &mut selected);
+        assert!(!response.changed());
+        assert_eq!(selected, 0);
     }
 }
