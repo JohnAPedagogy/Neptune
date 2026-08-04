@@ -34,3 +34,6 @@ name = "hello_sprite"
 
 [[example]]
 name = "orbit_cube"
+
+[[example]]
+name = "ui_demo"
