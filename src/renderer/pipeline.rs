@@ -148,3 +148,69 @@ fn entry_point(module: Arc<vulkano::shader::ShaderModule>) -> EntryPoint {
         .entry_point("main")
         .expect("shader module has no `main` entry point")
 }
+
+/// Builds the one pipeline the UI pass draws every primitive with: the same
+/// vertex shader and the sprite fragment shader (tinted, textured, alpha
+/// blended) as `MaterialId::Sprite`, but against `ui_render_pass` — which,
+/// unlike the main pass, has no depth attachment, so `depth_stencil_state`
+/// is `None` rather than reusing `MaterialId::Sprite`'s depth-test-no-write
+/// state. A pipeline is tied to the render pass (strictly, a *compatible*
+/// one) it was built against, so the main pass's already-cached Sprite
+/// pipeline cannot simply be reused here.
+pub(crate) fn build_ui_pipeline(
+    device: &Arc<Device>,
+    ui_render_pass: &Arc<RenderPass>,
+) -> Arc<GraphicsPipeline> {
+    let vs = entry_point(
+        shaders::vs::load(device.clone()).expect("failed to load the shared vertex shader"),
+    );
+    let fs = entry_point(
+        shaders::fs_sprite::load(device.clone())
+            .expect("failed to load the textured fragment shader"),
+    );
+
+    let vertex_input_state = SimpleVertex::per_vertex()
+        .definition(&vs)
+        .expect("SimpleVertex does not match the vertex shader's inputs");
+
+    let stages = vec![
+        PipelineShaderStageCreateInfo::new(vs),
+        PipelineShaderStageCreateInfo::new(fs),
+    ];
+
+    let layout = PipelineLayout::new(
+        device.clone(),
+        PipelineDescriptorSetLayoutCreateInfo::from_stages(stages.iter())
+            .into_pipeline_layout_create_info(device.clone())
+            .expect("failed to derive the pipeline layout from the shader stages"),
+    )
+    .expect("failed to create pipeline layout");
+
+    let subpass =
+        Subpass::from(ui_render_pass.clone(), 0).expect("UI render pass has no subpass 0");
+
+    GraphicsPipeline::new(
+        device.clone(),
+        None,
+        GraphicsPipelineCreateInfo {
+            stages: stages.into_iter().collect(),
+            vertex_input_state: Some(vertex_input_state),
+            input_assembly_state: Some(InputAssemblyState::default()),
+            viewport_state: Some(ViewportState::default()),
+            rasterization_state: Some(RasterizationState::default()),
+            multisample_state: Some(MultisampleState::default()),
+            color_blend_state: Some(ColorBlendState::with_attachment_states(
+                subpass.num_color_attachments(),
+                ColorBlendAttachmentState {
+                    blend: Some(AttachmentBlend::alpha()),
+                    ..Default::default()
+                },
+            )),
+            depth_stencil_state: None,
+            dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+            subpass: Some(subpass.into()),
+            ..GraphicsPipelineCreateInfo::layout(layout)
+        },
+    )
+    .expect("failed to compile the UI pipeline")
+}
