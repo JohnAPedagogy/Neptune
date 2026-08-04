@@ -1,7 +1,7 @@
 //! The persistent widget state (`Ui`) and the per-frame builder (`UiFrame`)
 //! every widget call in `widgets.rs` extends.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::input::MouseState;
@@ -12,6 +12,17 @@ use crate::text::GlyphAtlas;
 use super::draw_list::{UiDrawList, UiPrimitive};
 use super::layout::{Layout, WidgetId};
 use super::text::layout_text;
+
+/// Which edge of the screen a panel is snapped to. A panel docked to an edge
+/// is laid out flush against it, sharing the edge with any other panel docked
+/// the same way — see [`UiFrame::window`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockEdge {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
 
 /// A named font-size tier, matching egui's `TextStyle` in spirit: each
 /// variant's [`TextStyle::px`] is a *logical* pixel size at
@@ -58,6 +69,23 @@ pub struct Ui {
     pub(crate) active_drag: Option<WidgetId>,
     pub(crate) open: HashSet<WidgetId>,
     pub(crate) collapsed: HashSet<WidgetId>,
+    /// Panels in first-seen order — the stable order docked panels share an
+    /// edge in (see [`UiFrame::window`]).
+    pub(crate) panels: Vec<WidgetId>,
+    /// Each panel's top-left corner, the last place it was drawn.
+    pub(crate) panel_origin: HashMap<WidgetId, Vec2>,
+    /// Each panel's `(width, height)` from the last frame it drew, so docked
+    /// neighbours can relayout against it.
+    pub(crate) panel_size: HashMap<WidgetId, Vec2>,
+    /// Which panels are snapped to which screen edge.
+    pub(crate) docked: HashMap<WidgetId, DockEdge>,
+    /// Where a panel grab started, relative to the panel's origin — the drag
+    /// anchor that keeps a window from jumping when its header is grabbed.
+    pub(crate) grab_offset: Option<Vec2>,
+    /// The mouse position where a panel grab started. A grab only *becomes* a
+    /// drag (and undocks / re-snaps a window) once the cursor moves away from
+    /// here, so a plain click on a title bar never moves or un-docks the panel.
+    pub(crate) grab_start: Option<Vec2>,
     /// The DPI/zoom multiplier every widget's text size and layout metrics
     /// are scaled by. `1.0` means "one logical pixel is one physical
     /// pixel" — see [`Ui::set_pixels_per_point`].
@@ -75,6 +103,12 @@ impl Ui {
             active_drag: None,
             open: HashSet::new(),
             collapsed: HashSet::new(),
+            panels: Vec::new(),
+            panel_origin: HashMap::new(),
+            panel_size: HashMap::new(),
+            docked: HashMap::new(),
+            grab_offset: None,
+            grab_start: None,
             pixels_per_point: 1.0,
         }
     }
@@ -92,6 +126,15 @@ impl Ui {
     /// widget to nothing.
     pub fn set_pixels_per_point(&mut self, pixels_per_point: f32) {
         self.pixels_per_point = pixels_per_point.max(0.1);
+    }
+
+    /// Sets where `label`'s window first appears (its top-left corner), before
+    /// the user has dragged it anywhere — a startup layout hook for demo
+    /// screens. No-ops once the window has been drawn and remembered its own
+    /// position, so it can never fight the user's drags.
+    pub fn place_window(&mut self, label: &str, origin: Vec2) {
+        let id = WidgetId::new(label, 1);
+        self.panel_origin.entry(id).or_insert(origin);
     }
 
     /// Starts one frame's panel, laid out top-to-bottom from `origin`,
@@ -120,7 +163,8 @@ impl Ui {
 pub struct UiFrame<'a> {
     pub(crate) ui: &'a mut Ui,
     pub(crate) mouse: &'a MouseState,
-    #[allow(dead_code)] // read by future widgets that need to clamp to the window edge
+    /// Window size in pixels, in the same Y-down space widget rects use —
+    /// read by `window` to clamp drags and decide dock edges.
     pub(crate) screen: (f32, f32),
     pub(crate) layout: Layout,
     pub(crate) draw_list: UiDrawList,
@@ -231,6 +275,19 @@ mod tests {
         let Some(mut ui) = ui() else { return };
         ui.set_pixels_per_point(0.0);
         assert!(ui.pixels_per_point() > 0.0);
+    }
+
+    #[test]
+    fn place_window_seeds_a_windows_first_position() {
+        let Some(mut ui) = ui() else { return };
+        ui.place_window("Settings", Vec2::new(40.0, 60.0));
+        let mouse = MouseState::new();
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 200.0);
+        frame.window("Settings", 200.0, |_| {});
+        assert_eq!(
+            frame.ui.panel_origin[&WidgetId::new("Settings", 1)],
+            Vec2::new(40.0, 60.0)
+        );
     }
 
     #[test]

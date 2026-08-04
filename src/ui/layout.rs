@@ -27,7 +27,10 @@ impl WidgetId {
 }
 
 /// A top-to-bottom cursor over one panel's rectangle, handing each widget the
-/// next row and letting `folder` indent/outdent its children.
+/// next row and letting `folder` indent/outdent its children. Clonable so a
+/// container (`window`) can save the caller's cursor and restore it after
+/// laying its own contents out.
+#[derive(Clone)]
 pub(crate) struct Layout {
     origin: Vec2,
     cursor_y: f32,
@@ -68,6 +71,13 @@ impl Layout {
     pub(crate) fn outdent(&mut self, dx: f32) {
         self.origin.x -= dx;
         self.width += dx;
+    }
+
+    /// Pixels of vertical space consumed so far, relative to `origin` — what a
+    /// container (`window`) reads to learn how tall its contents grew this
+    /// frame.
+    pub(crate) fn cursor_y(&self) -> f32 {
+        self.cursor_y
     }
 }
 

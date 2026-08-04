@@ -1,12 +1,14 @@
-//! `orbit_cube`, plus a live control panel: drag Speed, toggle Wireframe,
+//! `orbit_cube`, plus live control panels: drag Speed, toggle Wireframe,
 //! pick a Shading mode, recolour the cube, and fold away Advanced — all
 //! drawn as a second, screen-space pass over the 3D scene. Demonstrates the
-//! design in `neptune-imgui-plus-datgui.md`.
+//! design in `neptune-imgui-plus-datgui.md`, including the draggable,
+//! dockable `window` containers.
 //!
 //! Run it with `cargo run --example ui_demo`. Controls are `orbit_cube`'s
 //! (left-drag orbits, scroll zooms, right-drag pans, Escape quits) plus the
-//! panel in the top-left corner, which eats clicks before they reach the
-//! camera controls.
+//! two panels: drag a panel's title bar to move it, or drag it to within a
+//! few pixels of a screen edge to dock it there. Panels eat clicks before
+//! they reach the camera controls.
 
 use neptune::prelude::*;
 
@@ -60,30 +62,31 @@ fn main() {
         camera.aspect = frame.aspect_ratio();
         camera.update(frame.input());
 
-        // Build this frame's panel before rendering — see Frame::render_ui's
-        // doc comment for why the ordering matters.
-        //
         // `frame.scale_factor()` is the OS's real display scale; the extra
-        // `* 1.4` is a deliberate demo-only bump so the panel reads clearly
-        // in a screenshot. The panel width scales by the same factor so the
-        // wider Heading title and DPI-scaled columns still fit.
+        // `* 1.4` is a deliberate demo-only bump so the panels read clearly
+        // in a screenshot. The window width scales by the same factor so the
+        // DPI-scaled columns still fit.
         let ppp = frame.scale_factor() * 1.4;
         ui.set_pixels_per_point(ppp);
 
+        // Seat the two windows. `place_window` only takes effect before a
+        // window has been drawn once, so from then on they remember where the
+        // user dragged (or docked) them.
+        ui.place_window("Controls", Vec2::new(16.0, 16.0));
+        ui.place_window("Advanced", Vec2::new(16.0, 16.0 + 160.0 * ppp));
+
         let mouse = frame.input().mouse().clone();
         let (width, height) = frame.size();
-        let mut ui_frame = ui.begin(
-            &mouse,
-            (width as f32, height as f32),
-            Vec2::new(16.0, 16.0),
-            280.0 * ppp,
-        );
-        ui_frame.label("Controls", TextStyle::Heading, Color::WHITE);
-        ui_frame.slider("Speed", &mut speed, 0.0..=5.0);
-        ui_frame.checkbox("Wireframe", &mut wireframe);
-        ui_frame.dropdown("Shading", &shading_options, &mut shading_idx);
-        ui_frame.color_edit("Tint", &mut tint);
-        ui_frame.folder("Advanced", |ui| {
+        let mut ui_frame = ui.begin(&mouse, (width as f32, height as f32), Vec2::ZERO, 0.0);
+
+        ui_frame.window("Controls", 280.0 * ppp, |ui| {
+            ui.label("Controls", TextStyle::Heading, Color::WHITE);
+            ui.slider("Speed", &mut speed, 0.0..=5.0);
+            ui.checkbox("Wireframe", &mut wireframe);
+            ui.dropdown("Shading", &shading_options, &mut shading_idx);
+            ui.color_edit("Tint", &mut tint);
+        });
+        ui_frame.window("Advanced", 280.0 * ppp, |ui| {
             ui.slider("FOV", &mut fov_deg, 30.0..=120.0);
         });
         let draw_list = ui_frame.finish();

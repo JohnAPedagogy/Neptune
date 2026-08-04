@@ -6,8 +6,8 @@ use std::ops::RangeInclusive;
 use crate::input::MouseButton;
 use crate::math::{Aabb2d, Color, Vec2};
 
-use super::context::{TextStyle, UiFrame};
-use super::layout::WidgetId;
+use super::context::{DockEdge, TextStyle, UiFrame};
+use super::layout::{Layout, WidgetId};
 
 /// Standard row height for every widget in this file.
 const ROW_HEIGHT: f32 = 22.0;
@@ -15,6 +15,13 @@ const ROW_HEIGHT: f32 = 22.0;
 const LABEL_WIDTH: f32 = 90.0;
 /// Right column reserved for a slider's live value readout.
 const VALUE_WIDTH: f32 = 56.0;
+/// Pixel height of a window's draggable title bar.
+const HEADER_HEIGHT: f32 = 24.0;
+/// Dragging a window's header to within this distance of a screen edge snaps
+/// it to that edge ([`DockEdge`]).
+const DOCK_THRESHOLD: f32 = 24.0;
+/// Gap between windows docked to the same screen edge.
+const DOCK_GUTTER: f32 = 8.0;
 
 const PRESETS: [Color; 6] = [
     Color::RED,
@@ -310,6 +317,172 @@ impl<'a> UiFrame<'a> {
             self.layout.outdent(indent);
         }
     }
+
+    /// A draggable, dockable panel: a title bar the user grabs to move the
+    /// whole window, with `contents` laid out below it. Dragging the title bar
+    /// to within [`DOCK_THRESHOLD`] of a screen edge snaps the window to that
+    /// edge ([`DockEdge`]); windows docked to the same edge share it, stacking
+    /// along the edge in the order they first appeared.
+    ///
+    /// Position and dock edge persist across frames (keyed by `label`), so the
+    /// panel floats exactly where the user left it and re-snaps to the same
+    /// edge when dragged there again. While a window is docked its origin is
+    /// computed from the edge, so its `width`/height and those of its docked
+    /// neighbours drive the layout.
+    pub fn window(&mut self, label: &str, width: f32, contents: impl FnOnce(&mut UiFrame<'_>)) {
+        let ppp = self.pixels_per_point();
+        let id = WidgetId::new(label, 1);
+        let header_h = HEADER_HEIGHT * ppp;
+        let threshold = DOCK_THRESHOLD * ppp;
+        let float_margin = 24.0 * ppp;
+
+        if !self.ui.panels.contains(&id) {
+            self.ui.panels.push(id);
+        }
+
+        // Where the window was when the frame began: a docked window lives at
+        // its edge-computed origin, a floating one where the user left it.
+        let mut docked = self.ui.docked.get(&id).copied();
+        let mut origin = if let Some(edge) = docked {
+            self.docked_origin(id, edge, width)
+        } else {
+            self.ui.panel_origin.get(&id).copied().unwrap_or(Vec2::ZERO)
+        };
+
+        if self.mouse.just_pressed(MouseButton::Left) {
+            if let Some((x, y)) = self.mouse.position() {
+                let header = Aabb2d::new(origin, Vec2::new(origin.x + width, origin.y + header_h));
+                if header.contains_point(Vec2::new(x, y)) {
+                    self.ui.active_drag = Some(id);
+                    self.ui.grab_offset = Some(Vec2::new(x, y) - origin);
+                    self.ui.grab_start = Some(Vec2::new(x, y));
+                }
+            }
+        }
+
+        if self.ui.active_drag == Some(id) {
+            if self.mouse.held(MouseButton::Left) {
+                if let Some((mx, my)) = self.mouse.position() {
+                    let grab_mouse = Vec2::new(mx, my);
+                    // A grab only becomes a drag once the cursor leaves the
+                    // press point, so a click on a title bar neither moves nor
+                    // un-docks the window — and a grab near the top edge is
+                    // not mistaken for a dock-to-top drag.
+                    let moving = self
+                        .ui
+                        .grab_start
+                        .map(|start| (grab_mouse - start).length_squared() > 1.0)
+                        .unwrap_or(false);
+                    if moving {
+                        if docked.is_some() {
+                            // Dragging a docked window away floats it; it
+                            // re-snaps when dragged near an edge below.
+                            self.ui.docked.remove(&id);
+                        }
+                        let grab = self.ui.grab_offset.unwrap_or(Vec2::ZERO);
+                        origin = grab_mouse - grab;
+                        origin.x =
+                            origin.x.clamp(-width + float_margin, self.screen.0 - float_margin);
+                        origin.y = origin.y.clamp(0.0, self.screen.1 - float_margin);
+
+                        let snapped = if mx <= threshold {
+                            Some(DockEdge::Left)
+                        } else if mx >= self.screen.0 - threshold {
+                            Some(DockEdge::Right)
+                        } else if my <= threshold {
+                            Some(DockEdge::Top)
+                        } else if my >= self.screen.1 - threshold {
+                            Some(DockEdge::Bottom)
+                        } else {
+                            None
+                        };
+                        if let Some(edge) = snapped {
+                            self.ui.docked.insert(id, edge);
+                            docked = Some(edge);
+                        } else {
+                            self.ui.docked.remove(&id);
+                            docked = None;
+                        }
+                    }
+                }
+            }
+            if self.mouse.just_released(MouseButton::Left) {
+                self.ui.active_drag = None;
+            }
+        }
+
+        let origin = if let Some(edge) = docked {
+            self.docked_origin(id, edge, width)
+        } else {
+            origin
+        };
+
+        // Lay the contents out below the header at full width, then splice the
+        // panel chrome in front of them so the background never covers them.
+        let prev_layout = self.layout.clone();
+        self.layout = Layout::new(Vec2::new(origin.x, origin.y + header_h), width);
+        let draw_start = self.draw_list.primitives.len();
+        contents(self);
+        let content_h = self.layout.cursor_y();
+        self.layout = prev_layout;
+
+        let panel_h = header_h + content_h;
+        let panel = Aabb2d::new(origin, Vec2::new(origin.x + width, origin.y + panel_h));
+        let contents_prims = self.draw_list.primitives.split_off(draw_start);
+        self.push_quad(panel, Color::rgba(0.15, 0.16, 0.19, 0.96));
+        let header = Aabb2d::new(origin, Vec2::new(origin.x + width, origin.y + header_h));
+        self.push_quad(header, Color::rgba(0.22, 0.23, 0.28, 0.98));
+        self.push_text(
+            Vec2::new(origin.x + 8.0 * ppp, origin.y + 5.0 * ppp),
+            label,
+            TextStyle::Button,
+            Color::WHITE,
+        );
+        self.draw_list.primitives.extend(contents_prims);
+
+        self.ui.panel_origin.insert(id, origin);
+        self.ui.panel_size.insert(id, Vec2::new(width, panel_h));
+    }
+
+    /// The edge-computed origin of a docked window: flush against the edge,
+    /// past every sibling docked to the same edge that first appeared before
+    /// it. Stored sizes from the previous frame drive the stacking, so a
+    /// window's own height does not need to be known before its contents run.
+    fn docked_origin(&self, id: WidgetId, edge: DockEdge, width: f32) -> Vec2 {
+        let ppp = self.pixels_per_point();
+        let gutter = DOCK_GUTTER * ppp;
+        let height = self
+            .ui
+            .panel_size
+            .get(&id)
+            .map(|size| size.y)
+            .unwrap_or(HEADER_HEIGHT * ppp);
+        let mut x = gutter;
+        let mut y = gutter;
+        for sibling in &self.ui.panels {
+            if self.ui.docked.get(sibling) == Some(&edge) {
+                if *sibling == id {
+                    break;
+                }
+                let size = self
+                    .ui
+                    .panel_size
+                    .get(sibling)
+                    .copied()
+                    .unwrap_or(Vec2::new(width, HEADER_HEIGHT * ppp));
+                match edge {
+                    DockEdge::Left | DockEdge::Right => y += size.y + gutter,
+                    DockEdge::Top | DockEdge::Bottom => x += size.x + gutter,
+                }
+            }
+        }
+        match edge {
+            DockEdge::Left => Vec2::new(gutter, y),
+            DockEdge::Right => Vec2::new(self.screen.0 - width - gutter, y),
+            DockEdge::Top => Vec2::new(x, gutter),
+            DockEdge::Bottom => Vec2::new(x, self.screen.1 - height - gutter),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -574,5 +747,223 @@ mod tests {
             ui.slider("FOV", &mut fov, 30.0..=120.0);
         });
         assert!(header_only_len < frame2.finish().len());
+    }
+
+    fn window_id(label: &str) -> WidgetId {
+        WidgetId::new(label, 1)
+    }
+
+    #[test]
+    fn a_window_draws_its_background_before_its_contents() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = 0.0f32;
+        let mouse = MouseState::new();
+        let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+        frame.window("Settings", 200.0, |ui| {
+            ui.slider("Speed", &mut value, 0.0..=10.0);
+        });
+        let list = frame.finish();
+        // bg + header + header label, then the slider's own label/track/thumb/value.
+        assert!(list.len() >= 6, "got {}", list.len());
+        // The first primitive is the panel background, flush with the origin.
+        assert_eq!(list.primitives[0].rect.min, Vec2::ZERO);
+    }
+
+    #[test]
+    fn dragging_the_header_moves_the_window_and_it_stays_put() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = 0.0f32;
+        let mut mouse = MouseState::new();
+
+        // Frame 1: place the window at the origin (no interaction).
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+        }
+        mouse.end_frame();
+
+        // Frame 2: grab the header at (150, 11). The origin is (0,0), so the
+        // grab offset is the click point itself.
+        press_at(&mut mouse, 150.0, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+        }
+        mouse.end_frame();
+
+        // Frame 3: still held, cursor moved by (100, 20): the origin follows.
+        mouse.handle_cursor_moved(PhysicalPosition::new(250.0, 31.0));
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+            assert_eq!(
+                frame.ui.panel_origin[&window_id("Settings")],
+                Vec2::new(100.0, 20.0)
+            );
+        }
+        mouse.end_frame();
+
+        // Frame 4: released — moving the cursor without a held button must not
+        // move the window.
+        mouse.handle_button_event(MouseButton::Left, ElementState::Released);
+        mouse.handle_cursor_moved(PhysicalPosition::new(400.0, 200.0));
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+            assert_eq!(
+                frame.ui.panel_origin[&window_id("Settings")],
+                Vec2::new(100.0, 20.0)
+            );
+        }
+    }
+
+    #[test]
+    fn dragging_a_window_to_the_left_edge_docks_it_flush_to_the_gutter() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = 0.0f32;
+        let mut mouse = MouseState::new();
+
+        press_at(&mut mouse, 150.0, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+        }
+        mouse.end_frame();
+
+        // Drag to the left edge while still held.
+        mouse.handle_cursor_moved(PhysicalPosition::new(4.0, 200.0));
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+            assert_eq!(frame.ui.docked[&window_id("Settings")], DockEdge::Left);
+            // Flush to the gutter, not parked at the drag clamp position.
+            assert_eq!(
+                frame.ui.panel_origin[&window_id("Settings")],
+                Vec2::new(DOCK_GUTTER, DOCK_GUTTER)
+            );
+        }
+    }
+
+    #[test]
+    fn docking_to_the_right_edge_anchors_the_window_to_it() {
+        let Some(mut ui) = ui() else { return };
+        let mut value = 0.0f32;
+        let mut mouse = MouseState::new();
+
+        press_at(&mut mouse, 150.0, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+        }
+        mouse.end_frame();
+
+        mouse.handle_cursor_moved(PhysicalPosition::new(796.0, 200.0));
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Settings", 200.0, |ui| {
+                ui.slider("Speed", &mut value, 0.0..=10.0);
+            });
+            assert_eq!(frame.ui.docked[&window_id("Settings")], DockEdge::Right);
+            // Right edge minus width minus gutter, and a right-flush panel.
+            let origin = frame.ui.panel_origin[&window_id("Settings")];
+            assert_eq!(origin.x, 800.0 - 200.0 - DOCK_GUTTER);
+        }
+    }
+
+    #[test]
+    fn windows_docked_to_the_same_edge_stack_along_it_in_first_seen_order() {
+        let Some(mut ui) = ui() else { return };
+        let mut speed = 0.0f32;
+        let mut fov = 75.0f32;
+        let mut mouse = MouseState::new();
+
+        // Dock "Main" to the left edge.
+        press_at(&mut mouse, 150.0, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Main", 200.0, |ui| {
+                ui.slider("Speed", &mut speed, 0.0..=10.0);
+            });
+        }
+        mouse.end_frame();
+        mouse.handle_cursor_moved(PhysicalPosition::new(4.0, 200.0));
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Main", 200.0, |ui| {
+                ui.slider("Speed", &mut speed, 0.0..=10.0);
+            });
+            assert_eq!(frame.ui.docked[&window_id("Main")], DockEdge::Left);
+        }
+        mouse.end_frame();
+        mouse.handle_button_event(MouseButton::Left, ElementState::Released);
+        mouse.end_frame();
+
+        // Park "Side" out of Main's way first: press at (150,11) moves its
+        // origin to (400,300), which no longer overlaps Main's header.
+        press_at(&mut mouse, 150.0, 11.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Side", 180.0, |ui| {
+                ui.slider("FOV", &mut fov, 30.0..=120.0);
+            });
+        }
+        mouse.end_frame();
+        mouse.handle_cursor_moved(PhysicalPosition::new(550.0, 311.0));
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Side", 180.0, |ui| {
+                ui.slider("FOV", &mut fov, 30.0..=120.0);
+            });
+            assert_eq!(
+                frame.ui.panel_origin[&window_id("Side")],
+                Vec2::new(400.0, 300.0)
+            );
+        }
+        mouse.end_frame();
+        mouse.handle_button_event(MouseButton::Left, ElementState::Released);
+        mouse.end_frame();
+
+        // Re-grab "Side" where its header now is — clear of Main's — and drag
+        // it to the left edge: it stacks below Main on the same edge.
+        press_at(&mut mouse, 560.0, 311.0);
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Main", 200.0, |ui| {
+                ui.slider("Speed", &mut speed, 0.0..=10.0);
+            });
+            frame.window("Side", 180.0, |ui| {
+                ui.slider("FOV", &mut fov, 30.0..=120.0);
+            });
+        }
+        mouse.end_frame();
+        mouse.handle_cursor_moved(PhysicalPosition::new(4.0, 500.0));
+        {
+            let mut frame = ui.begin(&mouse, (800.0, 600.0), Vec2::ZERO, 260.0);
+            frame.window("Main", 200.0, |ui| {
+                ui.slider("Speed", &mut speed, 0.0..=10.0);
+            });
+            frame.window("Side", 180.0, |ui| {
+                ui.slider("FOV", &mut fov, 30.0..=120.0);
+            });
+            let main_h = frame.ui.panel_size[&window_id("Main")].y;
+            let side = frame.ui.panel_origin[&window_id("Side")];
+            assert_eq!(side.x, DOCK_GUTTER);
+            assert_eq!(side.y, main_h + 2.0 * DOCK_GUTTER);
+            assert_eq!(frame.ui.docked[&window_id("Side")], DockEdge::Left);
+        }
     }
 }
