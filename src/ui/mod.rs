@@ -3,5 +3,6 @@
 //! design rationale.
 
 pub(crate) mod draw_list;
+pub(crate) mod layout;
 
 pub use draw_list::UiDrawList;
