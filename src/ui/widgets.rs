@@ -6,7 +6,7 @@ use std::ops::RangeInclusive;
 use crate::input::MouseButton;
 use crate::math::{Aabb2d, Color, Vec2};
 
-use super::context::{Ui, UiFrame};
+use super::context::UiFrame;
 use super::layout::WidgetId;
 
 /// Standard row height for every widget in this file.
@@ -284,6 +284,7 @@ mod tests {
     use crate::input::{MouseButton, MouseState};
     use crate::math::Vec2;
     use crate::text::Font;
+    use crate::ui::Ui;
     use winit::dpi::PhysicalPosition;
     use winit::event::ElementState;
 
