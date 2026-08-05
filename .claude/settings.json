@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "changed=$( { git diff --name-only --relative HEAD -- '*.rs'; git ls-files --others --exclude-standard -- '*.rs'; } | sort -u); [ -z \"$changed\" ] && exit 0; out=$(cargo clippy --message-format=short 2>&1); filtered=\"\"; while IFS= read -r f; do hit=$(printf '%s\\n' \"$out\" | grep -F -- \"$f:\"); [ -n \"$hit\" ] && filtered=\"$filtered$hit\"$'\\n'; done <<< \"$changed\"; [ -z \"$filtered\" ] && exit 0; msg=\"cargo clippy found issues in Rust files you modified this turn -- please fix before finishing:\"$'\\n'\"$filtered\"; jq -n --arg ctx \"$msg\" '{hookSpecificOutput:{hookEventName:\"Stop\", additionalContext:$ctx}}' 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "Running cargo clippy on modified Rust files..."
+          }
+        ]
+      }
+    ]
+  }
+}
