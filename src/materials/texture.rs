@@ -24,6 +24,8 @@ pub enum TextureError {
     Decode(image::ImageError),
     /// The supplied pixel buffer does not match `width * height * 4`.
     SizeMismatch { expected: usize, got: usize },
+    /// The URL could not be fetched.
+    Fetch(reqwest::Error),
 }
 
 impl fmt::Display for TextureError {
@@ -34,6 +36,7 @@ impl fmt::Display for TextureError {
                 f,
                 "pixel buffer has {got} bytes but {expected} were expected for the given size"
             ),
+            TextureError::Fetch(err) => write!(f, "failed to fetch image: {err}"),
         }
     }
 }
@@ -43,6 +46,12 @@ impl std::error::Error for TextureError {}
 impl From<image::ImageError> for TextureError {
     fn from(err: image::ImageError) -> Self {
         TextureError::Decode(err)
+    }
+}
+
+impl From<reqwest::Error> for TextureError {
+    fn from(err: reqwest::Error) -> Self {
+        TextureError::Fetch(err)
     }
 }
 
@@ -95,6 +104,14 @@ impl Texture {
         let decoded = image::load_from_memory(bytes)?.into_rgba8();
         let (width, height) = decoded.dimensions();
         Texture::from_rgba8(width, height, decoded.into_raw())
+    }
+
+    /// Fetches an image over HTTP(S) and decodes it. Blocks the calling
+    /// thread for the duration of the request.
+    pub fn from_url(url: impl reqwest::IntoUrl) -> Result<Self, TextureError> {
+        let response = reqwest::blocking::get(url)?.error_for_status()?;
+        let bytes = response.bytes()?;
+        Texture::from_encoded_bytes(&bytes)
     }
 
     /// A 1x1 opaque white texture, useful as a neutral stand-in.
@@ -204,6 +221,14 @@ mod tests {
         assert!(matches!(
             Texture::from_file("no-such-image-491723.png"),
             Err(TextureError::Decode(_))
+        ));
+    }
+
+    #[test]
+    fn from_url_reports_an_error_for_a_malformed_url() {
+        assert!(matches!(
+            Texture::from_url("not a url"),
+            Err(TextureError::Fetch(_))
         ));
     }
 }
