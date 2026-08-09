@@ -83,14 +83,14 @@ impl<'a> Frame<'a> {
     /// a late screenshot request does.
     ///
     /// ```no_run
-    /// # use neptune::prelude::*;
-    /// # fn demo(frame: &mut Frame, scene: &Scene, camera: &dyn Camera, mut ui: Ui) {
-    /// let (w, h) = frame.size();
-    /// let mut frame_ui = ui.begin(frame.input().mouse(), (w as f32, h as f32), Vec2::ZERO, 260.0);
-    /// frame_ui.label("hello", TextStyle::Body, Color::WHITE);
-    /// frame.render_ui(frame_ui.finish());
-    /// frame.render(scene, camera);
-    /// # }
+/// # use neptune::prelude::*;
+/// # fn demo(frame: &mut Frame, scene: &Scene, camera: &dyn Camera, mut ui: Ui) {
+/// let (w, h) = frame.size();
+/// let mut frame_ui = ui.begin(frame.input(), (w as f32, h as f32), Vec2::ZERO, 260.0);
+/// frame_ui.label("hello", TextStyle::Body, Color::WHITE);
+/// frame.render_ui(frame_ui.finish());
+/// frame.render(scene, camera);
+/// # }
     /// ```
     pub fn render_ui(&mut self, draw_list: UiDrawList) {
         self.state.request_ui(draw_list);
