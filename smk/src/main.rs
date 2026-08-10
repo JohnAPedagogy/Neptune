@@ -1,4 +1,5 @@
 mod capture;
+mod circuit_paths;
 
 use neptune::prelude::*;
 
