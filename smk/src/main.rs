@@ -1,3 +1,24 @@
+//! Süper Mario Kart's Donut Plains 1, rendered as a textured ground plane
+//! viewed through a real 3D orbit camera — no gameplay yet.
+//!
+//! This is M1 of a larger porting project: it establishes the asset
+//! pipeline (a circuit's top-down map texture), the Mode7-to-perspective
+//! camera math, and the ground-plane sizing, with everything else (karts,
+//! collision, HUD, ...) layered on in later milestones.
+//!
+//! Run it from the `smk/` directory (`cd smk && cargo run`) so its relative
+//! `assets/` folder resolves against the current working directory. If run
+//! from elsewhere — e.g. `cargo run --manifest-path smk/Cargo.toml` from the
+//! repo root — [`circuit_paths::asset_root`] falls back to the compiled-in
+//! `CARGO_MANIFEST_DIR`, so that works too.
+//!
+//! Controls (via [`OrbitCamera`]):
+//!
+//! - **left-drag** — orbit around the track
+//! - **right-drag** — pan the view
+//! - **scroll** — zoom in and out
+//! - **Escape** — quit
+
 mod camera_params;
 mod capture;
 mod circuit_paths;
@@ -18,8 +39,9 @@ fn main() {
     scene.background = Color::hex(0x14141c);
 
     // --- Ground plane: Donut Plains 1's top-down map texture. ---
-    let base_texture = Texture::from_file(circuit_paths::base_png_path("donut_plains_1"))
-        .expect("Donut Plains 1's base.png should decode (see Task 3's asset copy)");
+    let base_png = circuit_paths::base_png_path(&circuit_paths::asset_root(), "donut_plains_1");
+    let base_texture = Texture::from_file(&base_png)
+        .unwrap_or_else(|err| panic!("failed to load ground texture at {}: {err}", base_png.display()));
     let (ground_w, ground_h) =
         ground::ground_plane_size(base_texture.aspect_ratio(), ground::WORLD_SIZE);
 

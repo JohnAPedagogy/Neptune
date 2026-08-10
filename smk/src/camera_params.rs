@@ -5,7 +5,7 @@ pub const CAMERA_NEAR: f32 = 0.1;
 pub const CAMERA_FAR: f32 = 1000.0;
 
 /// Converts Mode7's half-FOV parameter to a real perspective camera's
-/// vertical field of view, in radians (`kart02porting.md` §4.1).
+/// vertical field of view, in radians (`kart02nport.md` §4.1).
 pub fn mode7_half_fov_to_vertical_fov(mode7_fov_half: f32) -> f32 {
     2.0 * mode7_fov_half.atan()
 }
