@@ -1,3 +1,4 @@
+mod camera_params;
 mod capture;
 mod circuit_paths;
 mod ground;
