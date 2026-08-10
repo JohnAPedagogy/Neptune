@@ -1,5 +1,3 @@
-use std::f32::consts::FRAC_PI_2;
-
 /// `map/map.h`'s `Map::MODE7_FOV_HALF`.
 pub const MODE7_FOV_HALF: f32 = 0.5;
 
@@ -20,7 +18,10 @@ mod tests {
     fn half_fov_of_one_gives_a_right_angle_fov() {
         // atan(1.0) = pi/4, doubled = pi/2 (90 degrees) exactly.
         let fov = mode7_half_fov_to_vertical_fov(1.0);
-        assert!((fov - FRAC_PI_2).abs() < 1e-6, "fov was {fov}");
+        assert!(
+            (fov - std::f32::consts::FRAC_PI_2).abs() < 1e-6,
+            "fov was {fov}"
+        );
     }
 
     #[test]
