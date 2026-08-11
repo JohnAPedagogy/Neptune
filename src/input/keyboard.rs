@@ -20,6 +20,11 @@ pub struct InputState {
     held: HashSet<KeyCode>,
     just_pressed: HashSet<KeyCode>,
     just_released: HashSet<KeyCode>,
+    /// Characters typed since the last frame boundary, in event order — what a
+    /// focused text field consumes to insert. Auto-repeat counts, so holding a
+    /// key types a stream of characters, exactly like the OS's own editing
+    /// behaviour.
+    text: Vec<String>,
     mouse: MouseState,
 }
 
@@ -61,16 +66,42 @@ impl InputState {
         !self.just_pressed.is_empty()
     }
 
-    /// Records one winit key event, ignoring keys with no physical code.
+    /// The characters typed since the last frame boundary, in event order.
+    /// Empty for a frame with no keystrokes; non-printing keys (arrows,
+    /// modifier, function) never appear here — they surface as `KeyCode`s via
+    /// [`InputState::just_pressed`] instead.
+    pub fn text(&self) -> &[String] {
+        &self.text
+    }
+
+    /// Records one winit key event: captures any character the key produces
+    /// (on press *and* auto-repeat, so held keys keep typing) and updates the
+    /// held/edge sets, ignoring keys with no physical code.
     pub(crate) fn handle_key_event(&mut self, event: &KeyEvent) {
+        if event.state == ElementState::Pressed {
+            if let Some(text) = &event.text {
+                self.push_typed(text);
+            }
+        }
         if let PhysicalKey::Code(code) = event.physical_key {
             self.set_key(code, event.state, event.repeat);
         }
     }
 
+    /// Appends a typed character (or run of characters, e.g. a composed dead
+    /// key pair) to this frame's text buffer. Split out of
+    /// [`InputState::handle_key_event`] so it can be tested without fabricating
+    /// a platform-specific winit `KeyEvent`.
+    pub(crate) fn push_typed(&mut self, text: &str) {
+        if !text.is_empty() {
+            self.text.push(text.to_string());
+        }
+    }
+
     /// The state machine behind [`InputState::handle_key_event`], split out so
-    /// it can be tested without fabricating a platform-specific winit event.
-    fn set_key(&mut self, code: KeyCode, state: ElementState, repeat: bool) {
+    /// it can be tested (and driven by widget tests) without fabricating a
+    /// platform-specific winit event.
+    pub(crate) fn set_key(&mut self, code: KeyCode, state: ElementState, repeat: bool) {
         match state {
             ElementState::Pressed => {
                 // `repeat` is the OS auto-repeat; the key is already held, so
@@ -92,6 +123,7 @@ impl InputState {
     pub(crate) fn end_frame(&mut self) {
         self.just_pressed.clear();
         self.just_released.clear();
+        self.text.clear();
         self.mouse.end_frame();
     }
 
@@ -190,5 +222,23 @@ mod tests {
         assert!(!input.held(KeyCode::KeyW));
         assert!(!input.held(KeyCode::KeyA));
         assert!(input.just_released(KeyCode::KeyW));
+    }
+
+    #[test]
+    fn typed_characters_are_captured_in_order_and_cleared_each_frame() {
+        let mut input = InputState::new();
+        input.push_typed("h");
+        input.push_typed("i");
+        assert_eq!(input.text(), &["h".to_string(), "i".to_string()]);
+
+        input.end_frame();
+        assert!(input.text().is_empty(), "text does not survive the frame");
+    }
+
+    #[test]
+    fn empty_typed_text_is_ignored() {
+        let mut input = InputState::new();
+        input.push_typed("");
+        assert!(input.text().is_empty());
     }
 }

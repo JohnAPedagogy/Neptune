@@ -5,8 +5,8 @@
 //! ```no_run
 //! use neptune::prelude::*;
 //!
-//! # fn demo(ui: &mut Ui, mouse: &MouseState, screen: (f32, f32), speed: &mut f32) {
-//! let mut frame = ui.begin(mouse, screen, Vec2::ZERO, 260.0);
+//! # fn demo(ui: &mut Ui, input: &InputState, screen: (f32, f32), speed: &mut f32) {
+//! let mut frame = ui.begin(input, screen, Vec2::ZERO, 260.0);
 //! frame.slider("Speed", speed, 0.0..=5.0);
 //! let draw_list = frame.finish();
 //! # let _ = draw_list;
