@@ -1,0 +1,10 @@
+[package]
+name = "ncubed-common"
+version = "0.1.0"
+edition = "2024"
+description = "Shared types and wire format for ncubed (cubed00.md)"
+
+[dependencies]
+glam = { version = "0.30.10", features = ["serde"] }
+postcard = { version = "1", features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }

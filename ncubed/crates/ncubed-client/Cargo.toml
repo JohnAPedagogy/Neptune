@@ -1,0 +1,11 @@
+[package]
+name = "ncubed-client"
+version = "0.1.0"
+edition = "2024"
+description = "Neptune client for ncubed: cubes on a plane, one per logged-in player (cubed00.md)"
+
+[dependencies]
+ncubed-common = { path = "../ncubed-common" }
+neptune = { path = "../../../Neptune" }
+postcard = "1"
+tokio = { version = "1", features = ["rt", "time", "net"] }
