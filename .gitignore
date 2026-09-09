@@ -1,6 +1,7 @@
 # Rust build artifacts
 /target
 **/*.rs.bk
+/.claude/worktrees
 
 # MSVC debug info
 *.pdb
