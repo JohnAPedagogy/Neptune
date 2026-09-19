@@ -66,6 +66,7 @@ pub(crate) fn record_scene(
     view_proj: Mat4,
 ) {
     for object in scene.objects() {
+        eprintln!("DBG: record_scene -> record_object");
         record_object(
             builder,
             ctx,
@@ -87,13 +88,16 @@ fn record_object(
     view_proj: Mat4,
     parent: Mat4,
 ) {
+    eprintln!("DBG: record_object entered");
     if !object.visible() {
         return;
     }
 
     let world = parent * object.transform().matrix();
+    eprintln!("DBG: record_object visible, world computed");
 
     if let Some(renderable) = object.renderable() {
+        eprintln!("DBG: record_object has renderable, before record_draw");
         record_draw(
             builder,
             ctx,
@@ -102,6 +106,7 @@ fn record_object(
             &renderable,
             view_proj * world,
         );
+        eprintln!("DBG: record_object after record_draw");
     }
 
     for child in object.children() {
@@ -125,12 +130,15 @@ fn record_draw(
     renderable: &crate::core::Renderable<'_>,
     mvp: Mat4,
 ) {
+    eprintln!("DBG: record_draw entered");
     let material = renderable.material;
     let binding = material.bind();
+    eprintln!("DBG: record_draw material bound, before get_or_create pipeline");
 
     let pipeline = caches
         .pipelines
         .get_or_create(&ctx.device, render_pass, material.material_id());
+    eprintln!("DBG: record_draw pipeline ready, before geometry upload");
     let layout = pipeline.layout().clone();
 
     // Empty geometry is legitimate — an empty string has no glyph quads.
@@ -140,6 +148,7 @@ fn record_draw(
     else {
         return;
     };
+    eprintln!("DBG: record_draw geometry uploaded");
     let (vertex_buffer, index_buffer, index_count) = (
         gpu.vertex_buffer.clone(),
         gpu.index_buffer.clone(),
@@ -205,14 +214,18 @@ pub(crate) fn record_ui(
         return;
     }
 
+    eprintln!("DBG: record_ui before get_or_create_ui_pipeline");
     let pipeline = caches.get_or_create_ui_pipeline(&ctx.device, ui_render_pass);
+    eprintln!("DBG: record_ui after get_or_create_ui_pipeline");
     let layout = pipeline.layout().clone();
 
     builder
         .bind_pipeline_graphics(pipeline)
         .expect("failed to bind the UI pipeline");
+    eprintln!("DBG: record_ui pipeline bound, primitives={}", draw_list.primitives.len());
 
-    for primitive in &draw_list.primitives {
+    for (i, primitive) in draw_list.primitives.iter().enumerate() {
+        eprintln!("DBG: record_ui primitive {i} start");
         let (vertices, indices) = quad_mesh(primitive);
         let vertex_buffer = upload_vertices(&ctx.memory_allocator, &vertices);
         let index_buffer = upload_indices(&ctx.memory_allocator, &indices);

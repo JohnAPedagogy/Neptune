@@ -194,6 +194,7 @@ impl RenderState {
 
     /// Acquires, records, submits and presents one frame.
     pub(super) fn render(&mut self, scene: &Scene, camera: &dyn Camera) {
+        eprintln!("DBG: RenderState::render entered");
         let (image_index, is_suboptimal, acquire_future) =
             match swapchain::acquire_next_image(self.surface_state.swapchain.clone(), None) {
                 Ok(result) => result,
@@ -203,6 +204,8 @@ impl RenderState {
                 }
                 Err(err) => panic!("failed to acquire a swapchain image: {err}"),
             };
+
+        eprintln!("DBG: acquired image {image_index}");
 
         if is_suboptimal {
             self.surface_state.recreate_needed = true;
@@ -237,6 +240,7 @@ impl RenderState {
                 [self.surface_state.viewport.clone()].into_iter().collect(),
             )
             .expect("failed to set the viewport");
+        eprintln!("DBG: main render pass begun, before record_scene");
 
         record_scene(
             &mut builder,
@@ -246,10 +250,12 @@ impl RenderState {
             scene,
             camera.view_proj_matrix(),
         );
+        eprintln!("DBG: after record_scene");
 
         builder
             .end_render_pass(SubpassEndInfo::default())
             .expect("failed to end the render pass");
+        eprintln!("DBG: after main end_render_pass");
 
         // The UI pass rides in the same command buffer, right after the 3D scene:
         // a second begin/end_render_pass pair over the same swapchain image.
@@ -257,7 +263,9 @@ impl RenderState {
         // primary command buffer, so no manual barrier is needed between the two
         // passes (see `neptune-imgui-plus-datgui.md` §3).
         if let Some(draw_list) = self.pending_ui.take() {
+            eprintln!("DBG: pending_ui taken, len={}", draw_list.len());
             if !draw_list.is_empty() {
+                eprintln!("DBG: before ui begin_render_pass");
                 builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
@@ -281,12 +289,14 @@ impl RenderState {
                     )
                     .expect("failed to set the UI viewport");
 
+                eprintln!("DBG: after ui begin_render_pass, before ui_camera");
                 let (width, height) = self.size();
                 // top=0, bottom=height: pixel Y-down (matching MouseState::position)
                 // maps directly onto this camera with no coordinate flip — see
                 // `neptune-imgui-plus-datgui.md` §3.
                 let ui_camera =
                     OrthographicCamera::new(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
+                eprintln!("DBG: ui_camera built, before record_ui");
 
                 record_ui(
                     &mut builder,
@@ -296,10 +306,12 @@ impl RenderState {
                     &draw_list,
                     ui_camera.view_proj_matrix(),
                 );
+                eprintln!("DBG: after record_ui");
 
                 builder
                     .end_render_pass(SubpassEndInfo::default())
                     .expect("failed to end the UI render pass");
+                eprintln!("DBG: after ui end_render_pass");
             }
         }
 

@@ -20,11 +20,13 @@ use neptune::prelude::*;
 mod capture;
 
 fn main() {
+    eprintln!("DBG: start");
     let mut renderer = Renderer::new(RendererOptions {
         width: 1280,
         height: 720,
         title: "Neptune - ui_demo",
     });
+    eprintln!("DBG: renderer created");
 
     let mut scene = Scene::new();
     scene.background = Color::hex(0x14141c);
@@ -37,11 +39,14 @@ fn main() {
         MeshBasicMaterial::new(Color::hex(0x9fb4ff)).with_wireframe(true),
     );
     let cube_id = scene.add(cube);
+    eprintln!("DBG: scene built");
 
     let atlas = Font::system_default()
         .and_then(|font| font.atlas(24.0))
         .expect("a system font is available");
+    eprintln!("DBG: atlas built");
     let mut ui = Ui::new(atlas.clone());
+    eprintln!("DBG: ui created");
 
     let mut speed = 0.8f32;
     let mut wireframe = true;
@@ -63,7 +68,12 @@ fn main() {
 
     let mut capture = capture::Capture::from_env();
 
+    let mut dbg_frame_count = 0u32;
     renderer.render_loop(move |frame| {
+        dbg_frame_count += 1;
+        if dbg_frame_count <= 3 {
+            eprintln!("DBG: frame {dbg_frame_count} start");
+        }
         if frame.input().just_pressed(KeyCode::Escape) && !ui.has_focus() {
             frame.exit();
         }
@@ -94,20 +104,34 @@ fn main() {
         let (width, height) = frame.size();
         let mut ui_frame = ui.begin(&input, (width as f32, height as f32), Vec2::ZERO, 0.0);
 
+        if dbg_frame_count <= 3 { eprintln!("DBG: before Controls window"); }
         ui_frame.window("Controls", 300.0 * ppp, |ui| {
+            if dbg_frame_count <= 3 { eprintln!("DBG: menu_bar"); }
             ui.menu_bar(&menu_entries, &mut menu_choice);
+            if dbg_frame_count <= 3 { eprintln!("DBG: label"); }
             ui.label("Controls", TextStyle::Heading, Color::WHITE);
+            if dbg_frame_count <= 3 { eprintln!("DBG: slider Speed"); }
             ui.slider("Speed", &mut speed, 0.0..=5.0);
+            if dbg_frame_count <= 3 { eprintln!("DBG: checkbox"); }
             ui.checkbox("Wireframe", &mut wireframe);
+            if dbg_frame_count <= 3 { eprintln!("DBG: dropdown"); }
             ui.dropdown("Shading", &shading_options, &mut shading_idx);
+            if dbg_frame_count <= 3 { eprintln!("DBG: color_edit"); }
             ui.color_edit("Tint", &mut tint);
 
+            if dbg_frame_count <= 3 { eprintln!("DBG: separator"); }
             ui.separator();
+            if dbg_frame_count <= 3 { eprintln!("DBG: heading"); }
             ui.heading("Player");
+            if dbg_frame_count <= 3 { eprintln!("DBG: text_input"); }
             ui.text_input("Name", &mut name);
+            if dbg_frame_count <= 3 { eprintln!("DBG: tooltip"); }
             ui.tooltip("The name shown to other players.");
+            if dbg_frame_count <= 3 { eprintln!("DBG: drag_value"); }
             ui.drag_value("Health", &mut health, 0.0..=1.0);
+            if dbg_frame_count <= 3 { eprintln!("DBG: progress_bar"); }
             ui.progress_bar(health);
+            if dbg_frame_count <= 3 { eprintln!("DBG: horizontal"); }
             ui.horizontal(|ui| {
                 if ui.button("Reset").clicked() {
                     health = 0.5;
@@ -117,22 +141,30 @@ fn main() {
                     quit = true;
                 }
             });
+            if dbg_frame_count <= 3 { eprintln!("DBG: selectable_label loop"); }
             for (i, preset_label) in presets.iter().enumerate() {
                 if ui.selectable_label(preset_label, preset == i).selected() {
                     preset = i;
                 }
             }
+            if dbg_frame_count <= 3 { eprintln!("DBG: image"); }
             ui.image(atlas.texture(), Vec2::new(120.0 * ppp, 120.0 * ppp));
+            if dbg_frame_count <= 3 { eprintln!("DBG: Controls window contents done"); }
         });
+        if dbg_frame_count <= 3 { eprintln!("DBG: before Advanced window"); }
         ui_frame.window("Advanced", 280.0 * ppp, |ui| {
             ui.slider("FOV", &mut fov_deg, 30.0..=120.0);
         });
+        if dbg_frame_count <= 3 { eprintln!("DBG: before finish"); }
         let draw_list = ui_frame.finish();
+        if dbg_frame_count <= 3 { eprintln!("DBG: after finish"); }
 
+        if dbg_frame_count <= 3 { eprintln!("DBG: before get_mut_as"); }
         if let Some(cube) = scene.get_mut_as::<Mesh<BufferGeometry<SimpleVertex>, MeshBasicMaterial>>(cube_id) {
             cube.material.wireframe = wireframe;
             cube.material.color = tint;
         }
+        if dbg_frame_count <= 3 { eprintln!("DBG: after get_mut_as"); }
         camera.fov = fov_deg.to_radians();
 
         // A menu choice just prints; the point is the widget working.
@@ -145,9 +177,14 @@ fn main() {
             frame.exit();
         }
 
+        if dbg_frame_count <= 3 { eprintln!("DBG: before render_ui"); }
         frame.render_ui(draw_list);
+        if dbg_frame_count <= 3 { eprintln!("DBG: after render_ui"); }
 
+        if dbg_frame_count <= 3 { eprintln!("DBG: before capture.update"); }
         capture.update(frame);
+        if dbg_frame_count <= 3 { eprintln!("DBG: before frame.render"); }
         frame.render(&scene, &camera);
+        if dbg_frame_count <= 3 { eprintln!("DBG: after frame.render"); }
     });
 }
