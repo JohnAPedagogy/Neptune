@@ -40,6 +40,7 @@ impl RenderCaches {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) fn get_or_create_ui_pipeline(
         &mut self,
         device: &Arc<Device>,
@@ -57,6 +58,7 @@ impl RenderCaches {
 ///
 /// Objects are drawn in insertion order; there is no depth sorting, so a scene
 /// mixing opaque and alpha-blended objects should add the opaque ones first.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn record_scene(
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ctx: &VulkanContext,
@@ -66,7 +68,6 @@ pub(crate) fn record_scene(
     view_proj: Mat4,
 ) {
     for object in scene.objects() {
-        eprintln!("DBG: record_scene -> record_object");
         record_object(
             builder,
             ctx,
@@ -88,16 +89,13 @@ fn record_object(
     view_proj: Mat4,
     parent: Mat4,
 ) {
-    eprintln!("DBG: record_object entered");
     if !object.visible() {
         return;
     }
 
     let world = parent * object.transform().matrix();
-    eprintln!("DBG: record_object visible, world computed");
 
     if let Some(renderable) = object.renderable() {
-        eprintln!("DBG: record_object has renderable, before record_draw");
         record_draw(
             builder,
             ctx,
@@ -106,7 +104,6 @@ fn record_object(
             &renderable,
             view_proj * world,
         );
-        eprintln!("DBG: record_object after record_draw");
     }
 
     for child in object.children() {
@@ -122,6 +119,7 @@ fn record_object(
     }
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 fn record_draw(
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ctx: &VulkanContext,
@@ -130,15 +128,12 @@ fn record_draw(
     renderable: &crate::core::Renderable<'_>,
     mvp: Mat4,
 ) {
-    eprintln!("DBG: record_draw entered");
     let material = renderable.material;
     let binding = material.bind();
-    eprintln!("DBG: record_draw material bound, before get_or_create pipeline");
 
     let pipeline = caches
         .pipelines
         .get_or_create(&ctx.device, render_pass, material.material_id());
-    eprintln!("DBG: record_draw pipeline ready, before geometry upload");
     let layout = pipeline.layout().clone();
 
     // Empty geometry is legitimate — an empty string has no glyph quads.
@@ -148,7 +143,6 @@ fn record_draw(
     else {
         return;
     };
-    eprintln!("DBG: record_draw geometry uploaded");
     let (vertex_buffer, index_buffer, index_count) = (
         gpu.vertex_buffer.clone(),
         gpu.index_buffer.clone(),
@@ -202,6 +196,7 @@ fn record_draw(
 /// `neptune-imgui-plus-datgui.md` §5). One draw call per primitive, same
 /// shape as `record_draw`'s one-draw-call-per-object, just against a single
 /// shared pipeline instead of a per-material one.
+#[tracing::instrument(level = "trace", skip_all, fields(primitives = draw_list.len()))]
 pub(crate) fn record_ui(
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ctx: &VulkanContext,
@@ -214,18 +209,14 @@ pub(crate) fn record_ui(
         return;
     }
 
-    eprintln!("DBG: record_ui before get_or_create_ui_pipeline");
     let pipeline = caches.get_or_create_ui_pipeline(&ctx.device, ui_render_pass);
-    eprintln!("DBG: record_ui after get_or_create_ui_pipeline");
     let layout = pipeline.layout().clone();
 
     builder
         .bind_pipeline_graphics(pipeline)
         .expect("failed to bind the UI pipeline");
-    eprintln!("DBG: record_ui pipeline bound, primitives={}", draw_list.primitives.len());
 
-    for (i, primitive) in draw_list.primitives.iter().enumerate() {
-        eprintln!("DBG: record_ui primitive {i} start");
+    for primitive in &draw_list.primitives {
         let (vertices, indices) = quad_mesh(primitive);
         let vertex_buffer = upload_vertices(&ctx.memory_allocator, &vertices);
         let index_buffer = upload_indices(&ctx.memory_allocator, &indices);

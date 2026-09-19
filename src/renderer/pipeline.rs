@@ -41,6 +41,7 @@ impl PipelineCache {
     }
 
     /// Returns the pipeline for `id`, compiling it if this is its first use.
+    #[tracing::instrument(level = "trace", skip_all, fields(material = ?id))]
     pub(crate) fn get_or_create(
         &mut self,
         device: &Arc<Device>,

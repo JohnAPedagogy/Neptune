@@ -16,3 +16,15 @@
 # choice and deliberately not committed here.
 [env]
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+
+# MSVC's default main-thread stack reserve is 1 MiB. A debug (unoptimized)
+# build's per-frame stack usage -- one big render_loop closure plus a deep,
+# un-inlined call chain through vulkano's pipeline-builder API -- can exceed
+# that on the very first frame that compiles a new GraphicsPipeline (e.g.
+# ui_demo's first UI-pass pipeline), crashing with STATUS_STACK_OVERFLOW
+# (0xc000041d) before any panic message prints. Confirmed by bisecting the
+# call chain with eprintln instrumentation: the crash point moved deeper and
+# then disappeared entirely once the reserve below was raised. Release builds
+# are unaffected (LLVM shrinks these frames drastically via optimization).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-args=/STACK:16777216"]
