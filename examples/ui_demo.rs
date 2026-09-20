@@ -134,7 +134,7 @@ fn main() {
                     preset = i;
                 }
             }
-            ui.image(atlas.texture(), Vec2::new(120.0 * ppp, 120.0 * ppp));
+            // ui.image(atlas.texture(), Vec2::new(120.0 * ppp, 120.0 * ppp));
         });
         ui_frame.window("Advanced", 280.0 * ppp, |ui| {
             ui.slider("FOV", &mut fov_deg, 30.0..=120.0);

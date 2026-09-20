@@ -39,8 +39,8 @@ fn main() {
         DirectionalLight::new(Color::WHITE, 0.8).with_direction(Vec3::new(-0.4, -1.0, -0.6)),
     );
     
-    //scene.background = Color::hex(0x123456);
-    scene.background = Texture::from_url("https://sbcode.net/img/grid.png");
+    scene.background = Color::hex(0x123456);
+    //scene.background = Texture::from_url("https://sbcode.net/img/grid.png");
 
     let mut angle: f32 = 0.0;
     let mut capture = capture::Capture::from_env();
