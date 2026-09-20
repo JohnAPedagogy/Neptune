@@ -20,9 +20,21 @@ use neptune::prelude::*;
 mod capture;
 
 fn main() {
+    // Off by default; enable with e.g. `RUST_LOG=neptune=trace cargo run
+    // --example ui_demo` to trace one frame's render_loop iteration, scene
+    // and UI recording, and pipeline (re)compilation. `with_span_events`
+    // makes every `#[instrument]`d function log a line on entry and exit
+    // (with duration) even though none of them emit their own `trace!`
+    // events — that's what actually produces output; span creation alone is
+    // silent.
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW | tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .init();
+
     let mut renderer = Renderer::new(RendererOptions {
-        width: 1280,
-        height: 720,
+        width: 1920,
+        height: 1080,
         title: "Neptune - ui_demo",
     });
 
@@ -122,7 +134,7 @@ fn main() {
                     preset = i;
                 }
             }
-            ui.image(atlas.texture(), Vec2::new(120.0 * ppp, 120.0 * ppp));
+            // ui.image(atlas.texture(), Vec2::new(120.0 * ppp, 120.0 * ppp));
         });
         ui_frame.window("Advanced", 280.0 * ppp, |ui| {
             ui.slider("FOV", &mut fov_deg, 30.0..=120.0);

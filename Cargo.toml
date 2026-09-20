@@ -12,12 +12,14 @@ bytemuck = { version = "1.25.2", features = ["derive"] }
 glam = { version = "0.30.10", features = ["bytemuck"] }
 image = "0.25.10"
 reqwest = { version = "0.13.4", features = ["blocking"] }
+tracing = "0.1.41"
 vulkano = "0.35.2"
 vulkano-shaders = "0.35.0"
 winit = "0.30.13"
 
 [dev-dependencies]
 rand = "0.8"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 # Cargo examples default to `test = false`, which would leave the flappy_bird
 # example's game-logic tests (gravity, collision, scoring, recycling, restart)

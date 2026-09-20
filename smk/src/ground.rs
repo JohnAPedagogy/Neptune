@@ -1,8 +1,9 @@
-/// World-space size (width, height in world units) of a `world_size`-square
-/// ground plane's largest side, preserving the source texture's aspect ratio.
-#[allow(dead_code)]
+/// Half-width baseline (in world units) used as the world-space scale for a
+/// circuit's ground plane.
 pub const WORLD_SIZE: f32 = 40.0;
 
+/// Computes aspect-ratio-preserving (width, height) dimensions, in world
+/// units, for a ground plane whose largest side is `world_size`.
 pub fn ground_plane_size(texture_aspect_ratio: f32, world_size: f32) -> (f32, f32) {
     if texture_aspect_ratio >= 1.0 {
         (world_size, world_size / texture_aspect_ratio)

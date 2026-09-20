@@ -440,6 +440,7 @@ impl<F> App<F>
 where
     F: FnMut(&mut Frame),
 {
+    #[tracing::instrument(level = "trace", skip_all)]
     fn draw_frame(&mut self, event_loop: &ActiveEventLoop) {
         // Ticked before the early returns below: a minimized window still
         // closes off the frame, so un-minimizing does not deliver one enormous

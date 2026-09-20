@@ -1,0 +1,9 @@
+[package]
+name = "ncubed-server"
+version = "0.1.0"
+edition = "2024"
+description = "Headless UDP server for ncubed (cubed00.md §3.2)"
+
+[dependencies]
+ncubed-common = { path = "../ncubed-common" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }

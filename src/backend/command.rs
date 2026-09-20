@@ -40,6 +40,7 @@ impl RenderCaches {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) fn get_or_create_ui_pipeline(
         &mut self,
         device: &Arc<Device>,
@@ -57,6 +58,7 @@ impl RenderCaches {
 ///
 /// Objects are drawn in insertion order; there is no depth sorting, so a scene
 /// mixing opaque and alpha-blended objects should add the opaque ones first.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn record_scene(
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ctx: &VulkanContext,
@@ -117,6 +119,7 @@ fn record_object(
     }
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 fn record_draw(
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ctx: &VulkanContext,
@@ -193,6 +196,7 @@ fn record_draw(
 /// `neptune-imgui-plus-datgui.md` §5). One draw call per primitive, same
 /// shape as `record_draw`'s one-draw-call-per-object, just against a single
 /// shared pipeline instead of a per-material one.
+#[tracing::instrument(level = "trace", skip_all, fields(primitives = draw_list.len()))]
 pub(crate) fn record_ui(
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ctx: &VulkanContext,
